@@ -890,7 +890,7 @@
 
         function showResult() {
             hideAllScreens();
-            document.getElementById('result-screen').style.display = 'block';
+            document.getElementById('result-screen').classList.remove('hidden');
 
             const resultType = resultTypes.find(type =>
                 totalScore >= type.minScore && totalScore <= type.maxScore
