@@ -23,11 +23,27 @@
         .container {
             max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 15px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             justify-content: center;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+                justify-content: flex-start;
+                padding-top: 20px;
+            }
+
+            .title {
+                font-size: 1.8rem !important;
+            }
+
+            .subtitle {
+                font-size: 1rem !important;
+            }
         }
 
         .header {
@@ -470,7 +486,6 @@
 
                 <div class="answers-grid" id="answers-grid"></div>
 
-                <button class="next-btn" id="next-btn" onclick="nextQuestion()">Продолжить</button>
             </div>
 
             <!-- Result Screen -->
@@ -792,9 +807,7 @@
 
             updateProgress();
 
-            // Reset next button
-            const nextBtn = document.getElementById('next-btn');
-            nextBtn.classList.remove('enabled');
+            // Автоматический переход к следующему вопросу
         }
 
         function selectAnswer(answerIndex) {
@@ -805,7 +818,10 @@
             document.querySelectorAll('.answer-option')[answerIndex].classList.add('selected');
             answers[currentQuestion] = answerIndex;
 
-            document.getElementById('next-btn').classList.add('enabled');
+            // Сразу переходим к следующему вопросу
+            setTimeout(() => {
+                nextQuestion();
+            }, 300);
         }
 
         function nextQuestion() {
