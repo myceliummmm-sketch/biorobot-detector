@@ -682,40 +682,34 @@
             hideAllScreens();
             document.getElementById('auth-screen').classList.remove('hidden');
 
-            // Для localhost используем тестовую кнопку, для продакшена - реальный Widget
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            // Показываем кнопку "Открыть в Telegram"
+            const loginBtn = document.getElementById('telegram-login');
+            loginBtn.innerHTML = `
+                <div style="text-align: center;">
+                    <button style="
+                        background: linear-gradient(135deg, #0088cc, #0066aa);
+                        color: white;
+                        border: none;
+                        padding: 15px 30px;
+                        border-radius: 25px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        cursor: pointer;
+                        box-shadow: 0 4px 15px rgba(0,136,204,0.3);
+                        transition: transform 0.2s;
+                    " onclick="openInTelegram()" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        📱 Открыть в Telegram
+                    </button>
+                    <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                        Для прохождения теста необходимо открыть приложение в Telegram
+                    </p>
+                </div>
+            `;
+        }
 
-            if (isLocalhost) {
-                // Тестовая авторизация для localhost
-                document.getElementById('telegram-login').addEventListener('click', () => {
-                    const testUser = {
-                        id: Date.now(),
-                        first_name: "Test",
-                        last_name: "User",
-                        username: "testuser",
-                        auth_date: Math.floor(Date.now() / 1000)
-                    };
-                    authenticateWithTelegram(testUser);
-                });
-            } else {
-                // Реальный Telegram Login Widget для продакшена
-                const loginBtn = document.getElementById('telegram-login');
-                loginBtn.style.display = 'none';
-
-                const script = document.createElement('script');
-                script.async = true;
-                script.src = 'https://telegram.org/js/telegram-widget.js?22';
-                script.setAttribute('data-telegram-login', 'mdao_community_bot');
-                script.setAttribute('data-size', 'large');
-                script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-                script.setAttribute('data-request-access', 'write');
-
-                loginBtn.parentNode.insertBefore(script, loginBtn.nextSibling);
-
-                window.onTelegramAuth = function(user) {
-                    authenticateWithTelegram(user);
-                };
-            }
+        function openInTelegram() {
+            const url = 'https://t.me/mdao_community_bot/biorobot_detector';
+            window.open(url, '_blank');
         }
 
         function authenticateWithTelegram(userData) {
