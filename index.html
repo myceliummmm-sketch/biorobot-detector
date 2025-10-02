@@ -715,27 +715,15 @@
         function authenticateWithTelegram(userData) {
             showLoading();
 
-            fetch('/api/auth/telegram', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(userData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.sessionId) {
-                    currentUser = data.user;
-                    sessionId = data.sessionId;
-                    showWelcomeScreen();
-                } else {
-                    showAuthError('Ошибка авторизации');
-                }
-            })
-            .catch(error => {
-                console.error('Auth error:', error);
-                showAuthError('Ошибка соединения с сервером');
-            });
+            // Работаем без сервера - сохраняем локально
+            currentUser = userData;
+            sessionId = 'local_' + Date.now();
+            localStorage.setItem('currentUser', JSON.stringify(userData));
+            localStorage.setItem('sessionId', sessionId);
+
+            setTimeout(() => {
+                showWelcomeScreen();
+            }, 500);
         }
 
         function showLoading() {
@@ -865,25 +853,17 @@
         function saveResult(score, resultType, testAnswers) {
             if (!sessionId) return;
 
-            fetch('/api/test/result', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Session-ID': sessionId
-                },
-                body: JSON.stringify({
-                    score: score,
-                    result_type: resultType,
-                    answers: testAnswers
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Result saved:', data);
-            })
-            .catch(error => {
-                console.error('Error saving result:', error);
-            });
+            // Сохраняем результат локально
+            const testResult = {
+                user: currentUser,
+                score: score,
+                result_type: resultType,
+                answers: testAnswers,
+                date: new Date().toISOString()
+            };
+
+            localStorage.setItem('testResult', JSON.stringify(testResult));
+            console.log('Result saved locally:', testResult);
         }
 
         function shareResult(platform) {
