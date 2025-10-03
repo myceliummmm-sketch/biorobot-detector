@@ -667,7 +667,14 @@
                 // Если пользователь уже авторизован в Telegram Web App
                 if (window.Telegram.WebApp.initDataUnsafe.user) {
                     const user = window.Telegram.WebApp.initDataUnsafe.user;
-                    authenticateWithTelegram(user);
+                    // Передаем реальные данные Telegram пользователя
+                    authenticateWithTelegram({
+                        telegramId: user.id,
+                        firstName: user.first_name,
+                        lastName: user.last_name,
+                        username: user.username,
+                        languageCode: user.language_code
+                    });
                 } else {
                     authenticateWithTelegram({ isDemo: true });
                 }
