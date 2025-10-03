@@ -42,9 +42,12 @@ module.exports = async (req, res) => {
         // Save test result
         const testResult = {
             user_id: session.user_id,
+            session_id: session.id,
             answers: answers,
             score: score,
-            result_type: resultType
+            result_type: resultType,
+            result_title: resultType || 'Test Result',
+            result_description: `Score: ${score}/40`
         };
 
         const { data: result, error: resultError } = await supabase
