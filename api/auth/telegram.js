@@ -1,77 +1,123 @@
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY
+);
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+module.exports = async (req, res) => {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  try {
-    const userData = req.body;
-
-    // Проверяем и сохраняем пользователя
-    const { data: existingUser, error: selectError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('telegram_id', userData.id)
-      .single();
-
-    let user;
-    if (selectError && selectError.code === 'PGRST116') {
-      // Пользователь не найден, создаем нового
-      const { data: newUser, error: insertError } = await supabase
-        .from('users')
-        .insert([{
-          telegram_id: userData.id,
-          first_name: userData.first_name,
-          last_name: userData.last_name,
-          username: userData.username,
-          created_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-      user = newUser;
-    } else if (selectError) {
-      throw selectError;
-    } else {
-      user = existingUser;
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
     }
 
-    // Создаем сессию
-    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
 
-    const { error: sessionError } = await supabase
-      .from('sessions')
-      .insert([{
-        session_id: sessionId,
-        user_id: user.id,
-        created_at: new Date().toISOString()
-      }]);
+    try {
+        const { telegramId, username, firstName, lastName, languageCode, isDemo } = req.body;
 
-    if (sessionError) throw sessionError;
+        // Handle demo/fallback mode for browser testing
+        if (isDemo || !telegramId) {
+            const demoUser = {
+                telegram_id: Math.floor(Math.random() * 1000000) + 999999,
+                username: 'demo_user',
+                first_name: 'Demo',
+                last_name: 'User',
+                language_code: 'ru'
+            };
 
-    res.status(200).json({
-      success: true,
-      sessionId,
-      user: {
-        id: user.id,
-        telegram_id: user.telegram_id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        username: user.username
-      }
-    });
+            // Create demo user in database
+            const { data: user, error: userError } = await supabase
+                .from('users')
+                .upsert(demoUser, { onConflict: 'telegram_id' })
+                .select()
+                .single();
 
-  } catch (error) {
-    console.error('Auth error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Authentication failed'
-    });
-  }
-}
+            if (userError) {
+                console.error('Demo user creation error:', userError);
+                return res.status(500).json({ error: 'Failed to create demo user' });
+            }
+
+            // Create session for demo user
+            const sessionToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+            const { data: session, error: sessionError } = await supabase
+                .from('sessions')
+                .insert({
+                    user_id: user.id,
+                    session_token: sessionToken,
+                    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+                })
+                .select()
+                .single();
+
+            if (sessionError) {
+                console.error('Demo session creation error:', sessionError);
+                return res.status(500).json({ error: 'Failed to create demo session' });
+            }
+
+            return res.status(200).json({
+                sessionId: session.session_token,
+                user: user
+            });
+        }
+
+        // Handle real Telegram authentication
+        if (!telegramId) {
+            return res.status(400).json({ error: 'Telegram ID is required' });
+        }
+
+        // Create or update user
+        const userData = {
+            telegram_id: telegramId,
+            username: username || null,
+            first_name: firstName || null,
+            last_name: lastName || null,
+            language_code: languageCode || 'ru'
+        };
+
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .upsert(userData, { onConflict: 'telegram_id' })
+            .select()
+            .single();
+
+        if (userError) {
+            console.error('User creation error:', userError);
+            return res.status(500).json({ error: 'Failed to create user' });
+        }
+
+        // Create session
+        const sessionToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+        const { data: session, error: sessionError } = await supabase
+            .from('sessions')
+            .insert({
+                user_id: user.id,
+                session_token: sessionToken,
+                expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+            })
+            .select()
+            .single();
+
+        if (sessionError) {
+            console.error('Session creation error:', sessionError);
+            return res.status(500).json({ error: 'Failed to create session' });
+        }
+
+        res.status(200).json({
+            sessionId: session.session_token,
+            user: user
+        });
+
+    } catch (error) {
+        console.error('Auth API error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
