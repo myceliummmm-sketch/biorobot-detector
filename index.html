@@ -470,7 +470,6 @@
 
                 <div class="answers-grid" id="answers-grid"></div>
 
-                <button class="next-btn" id="next-btn" onclick="nextQuestion()">Продолжить</button>
             </div>
 
             <!-- Result Screen -->
@@ -810,9 +809,7 @@
 
             updateProgress();
 
-            // Reset next button
-            const nextBtn = document.getElementById('next-btn');
-            nextBtn.classList.remove('enabled');
+            // No next button to reset anymore
         }
 
         function selectAnswer(answerIndex) {
@@ -823,7 +820,10 @@
             document.querySelectorAll('.answer-option')[answerIndex].classList.add('selected');
             answers[currentQuestion] = answerIndex;
 
-            document.getElementById('next-btn').classList.add('enabled');
+            // Auto-advance to next question after a short delay
+            setTimeout(() => {
+                nextQuestion();
+            }, 800);
         }
 
         function nextQuestion() {
