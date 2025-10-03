@@ -419,7 +419,7 @@
 
         <div class="card">
             <!-- Auth Screen -->
-            <div id="auth-screen" class="auth-screen">
+            <div id="auth-screen" class="auth-screen" style="display: block;">
                 <p class="auth-description">
                     Этот тест поможет определить, насколько вы сохранили человечность в эпоху цифровых технологий.
                     Ответьте честно на 10 вопросов и узнайте свой тип личности.
@@ -429,19 +429,19 @@
                         style="display: inline-block; padding: 15px 30px; background: #0088cc; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 600; text-decoration: none; font-size: 16px;">
                     🚀 Начать тест
                 </button>
-                <div id="auth-error" class="error hidden">
+                <div id="auth-error" class="error" style="display: none;">
                     Ошибка авторизации. Попробуйте снова.
                 </div>
             </div>
 
             <!-- Loading Screen -->
-            <div id="loading-screen" class="loading hidden">
+            <div id="loading-screen" class="loading" style="display: none;">
                 <div class="spinner"></div>
                 <p>Загрузка...</p>
             </div>
 
             <!-- Test Screen -->
-            <div id="test-screen" class="hidden">
+            <div id="test-screen" style="display: none;">
                 <div class="progress-container">
                     <div class="progress-bar">
                         <div class="progress-fill" id="progress-fill"></div>
@@ -459,7 +459,7 @@
             </div>
 
             <!-- Result Screen -->
-            <div id="result-screen" class="result-container">
+            <div id="result-screen" class="result-container" style="display: none;">
                 <div class="result-emoji" id="result-emoji"></div>
                 <h2 class="result-title" id="result-title"></h2>
                 <p class="result-description" id="result-description"></p>
@@ -646,17 +646,31 @@
         });
 
         function initApp() {
-            // Показываем экран авторизации
-            showAuthScreen();
+            // Проверяем Telegram Web App
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe.user) {
+                window.Telegram.WebApp.ready();
+                const user = window.Telegram.WebApp.initDataUnsafe.user;
+                // Авторизуемся через Telegram
+                authenticateWithTelegram({
+                    telegramId: user.id,
+                    firstName: user.first_name,
+                    lastName: user.last_name,
+                    username: user.username,
+                    languageCode: user.language_code
+                });
+            } else {
+                // Показываем кнопку для браузера
+                showAuthScreen();
+            }
         }
 
         function showAuthScreen() {
             hideAllScreens();
-            document.getElementById('auth-screen').classList.remove('hidden');
+            document.getElementById('auth-screen').style.display = 'block';
         }
 
         function handleStartClick() {
-            // Сразу авторизуемся в demo режиме и запускаем тест
+            // Demo авторизация для браузера
             authenticateWithTelegram({ isDemo: true });
         }
 
@@ -688,26 +702,27 @@
 
         function showLoading() {
             hideAllScreens();
-            document.getElementById('loading-screen').classList.remove('hidden');
+            document.getElementById('loading-screen').style.display = 'flex';
         }
 
         function showAuthError(message) {
             hideAllScreens();
-            document.getElementById('auth-screen').classList.remove('hidden');
+            document.getElementById('auth-screen').style.display = 'block';
             const errorEl = document.getElementById('auth-error');
             errorEl.textContent = message;
-            errorEl.classList.remove('hidden');
+            errorEl.style.display = 'block';
         }
 
         function hideAllScreens() {
-            document.querySelectorAll('.auth-screen, .loading, #test-screen, #result-screen').forEach(el => {
-                el.classList.add('hidden');
-            });
+            document.getElementById('auth-screen').style.display = 'none';
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('test-screen').style.display = 'none';
+            document.getElementById('result-screen').style.display = 'none';
         }
 
         function startTest() {
             hideAllScreens();
-            document.getElementById('test-screen').classList.remove('hidden');
+            document.getElementById('test-screen').style.display = 'block';
             currentQuestion = 0;
             answers = [];
             totalScore = 0;
