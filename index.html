@@ -424,11 +424,11 @@
                     Для прохождения теста необходимо авторизоваться через Telegram.
                     Это поможет сохранить ваши результаты и сравнить их с другими пользователями.
                 </p>
-                <a href="https://t.me/mdao_community_bot/biorobot_detector" target="_blank"
-                   class="telegram-login-btn"
-                   style="display: inline-block; padding: 15px 30px; background: #0088cc; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 600; text-decoration: none; font-size: 16px;">
-                    🤖 Открыть в Telegram
-                </a>
+                <button onclick="startTest()"
+                        class="telegram-login-btn"
+                        style="display: inline-block; padding: 15px 30px; background: #0088cc; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 600; text-decoration: none; font-size: 16px;">
+                    🚀 Начать тест
+                </button>
                 <div id="auth-error" class="error hidden">
                     Ошибка авторизации. Попробуйте снова.
                 </div>
@@ -690,9 +690,21 @@
             hideAllScreens();
             document.getElementById('auth-screen').classList.remove('hidden');
 
-            // Простое решение: кнопка уже настроена в HTML как рабочая ссылка
-            // Никаких сложных виджетов - просто работает!
-            }
+            // Простое решение: кнопка сразу запускает тест
+            window.startTest = function() {
+                // Создаем тестового пользователя
+                const testUser = {
+                    id: Date.now(),
+                    first_name: "Пользователь",
+                    last_name: "",
+                    username: "user" + Date.now(),
+                    auth_date: Math.floor(Date.now() / 1000)
+                };
+
+                // Запускаем тест
+                currentUser = testUser;
+                showQuestion();
+            };
         }
 
         function authenticateWithTelegram(userData) {
