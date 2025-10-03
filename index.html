@@ -5,34 +5,173 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Детектор Биоробота</title>
     <style>
-        body { 
+        body {
             background: linear-gradient(135deg, #667eea, #764ba2);
-            margin: 0; 
+            margin: 0;
             padding: 20px;
             font-family: Arial, sans-serif;
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
+            color: white;
         }
+        .title { font-size: 48px; margin-bottom: 20px; text-align: center; }
         .button {
             padding: 20px 40px;
             background: #00ff00;
             color: black;
             border: none;
             border-radius: 30px;
-            font-size: 20px;
+            font-size: 24px;
             font-weight: bold;
             cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
+            margin: 10px;
+            transition: all 0.3s ease;
         }
         .button:hover { transform: scale(1.1); }
+        .hidden { display: none; }
+        .question {
+            background: white;
+            color: black;
+            padding: 30px;
+            border-radius: 20px;
+            max-width: 600px;
+            text-align: center;
+            margin: 20px;
+        }
+        .answer-btn {
+            padding: 15px 25px;
+            background: #0088cc;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            margin: 10px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .answer-btn:hover { background: #006ba8; }
+        .result {
+            background: white;
+            color: black;
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 500px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
-    <a href="https://t.me/share/url?url=https://biorobot-detector.vercel.app&text=Тест работает!" class="button">
-        ✅ ТЕСТ РАБОТАЕТ - НАЖМИ МЕНЯ!
-    </a>
+    <div id="welcome" class="screen">
+        <div class="title">🤖 Детектор Биоробота</div>
+        <p style="text-align: center; font-size: 18px;">Узнайте, насколько вы человечны</p>
+        <button class="button" onclick="startTest()">🚀 НАЧАТЬ ТЕСТ</button>
+    </div>
+
+    <div id="test" class="screen hidden">
+        <div class="question">
+            <h2 id="question-text"></h2>
+            <div id="answers"></div>
+        </div>
+    </div>
+
+    <div id="result" class="screen hidden">
+        <div class="result">
+            <h2 id="result-title"></h2>
+            <p id="result-description"></p>
+            <button class="button" onclick="restartTest()">🔄 ПРОЙТИ ЗАНОВО</button>
+        </div>
+    </div>
+
+    <script>
+        let currentQuestion = 0;
+        let score = 0;
+
+        const questions = [
+            {
+                text: "Как вы проводите утро?",
+                answers: [
+                    { text: "Сразу проверяю телефон", points: 1 },
+                    { text: "Медитирую или делаю зарядку", points: 4 },
+                    { text: "Читаю новости", points: 2 },
+                    { text: "Пью кофе в тишине", points: 3 }
+                ]
+            },
+            {
+                text: "Как вы принимаете решения?",
+                answers: [
+                    { text: "Анализирую данные", points: 1 },
+                    { text: "Слушаю интуицию", points: 4 },
+                    { text: "Советуюсь с друзьями", points: 3 },
+                    { text: "Ищу в интернете", points: 2 }
+                ]
+            },
+            {
+                text: "Ваше отношение к эмоциям?",
+                answers: [
+                    { text: "Контролирую логикой", points: 1 },
+                    { text: "Выражаю открыто", points: 4 },
+                    { text: "Делюсь с близкими", points: 3 },
+                    { text: "Записываю в дневник", points: 2 }
+                ]
+            }
+        ];
+
+        const results = [
+            { min: 3, max: 6, title: "🤖 Биоробот", desc: "Вы очень логичны и технологичны!" },
+            { min: 7, max: 9, title: "🧠 Киборг", desc: "Баланс между логикой и эмоциями." },
+            { min: 10, max: 12, title: "🧑 Человек", desc: "Вы очень человечны и эмоциональны!" }
+        ];
+
+        function startTest() {
+            document.getElementById('welcome').classList.add('hidden');
+            document.getElementById('test').classList.remove('hidden');
+            currentQuestion = 0;
+            score = 0;
+            showQuestion();
+        }
+
+        function showQuestion() {
+            if (currentQuestion >= questions.length) {
+                showResult();
+                return;
+            }
+
+            const question = questions[currentQuestion];
+            document.getElementById('question-text').textContent = question.text;
+
+            const answersDiv = document.getElementById('answers');
+            answersDiv.innerHTML = '';
+
+            question.answers.forEach((answer, index) => {
+                const btn = document.createElement('button');
+                btn.textContent = answer.text;
+                btn.className = 'answer-btn';
+                btn.onclick = () => selectAnswer(answer.points);
+                answersDiv.appendChild(btn);
+            });
+        }
+
+        function selectAnswer(points) {
+            score += points;
+            currentQuestion++;
+            setTimeout(showQuestion, 500);
+        }
+
+        function showResult() {
+            document.getElementById('test').classList.add('hidden');
+            document.getElementById('result').classList.remove('hidden');
+
+            const result = results.find(r => score >= r.min && score <= r.max);
+            document.getElementById('result-title').textContent = result.title;
+            document.getElementById('result-description').textContent = result.desc;
+        }
+
+        function restartTest() {
+            document.getElementById('result').classList.add('hidden');
+            document.getElementById('welcome').classList.remove('hidden');
+        }
+    </script>
 </body>
 </html>
