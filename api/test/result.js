@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
     }
 
     try {
-        const { sessionId, answers, score, resultType, resultTitle, resultDescription } = req.body;
+        const { sessionId, answers, score, resultType } = req.body;
 
         if (!sessionId) {
             return res.status(400).json({ error: 'Session ID is required' });
@@ -42,12 +42,9 @@ module.exports = async (req, res) => {
         // Save test result
         const testResult = {
             user_id: session.user_id,
-            session_id: session.id,
             answers: answers,
             score: score,
-            result_type: resultType,
-            result_title: resultTitle,
-            result_description: resultDescription
+            result_type: resultType
         };
 
         const { data: result, error: resultError } = await supabase
