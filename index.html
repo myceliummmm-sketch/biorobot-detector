@@ -421,10 +421,10 @@
             <!-- Auth Screen -->
             <div id="auth-screen" class="auth-screen">
                 <p class="auth-description">
-                    Для прохождения теста необходимо авторизоваться через Telegram.
-                    Это поможет сохранить ваши результаты и сравнить их с другими пользователями.
+                    Этот тест поможет определить, насколько вы сохранили человечность в эпоху цифровых технологий.
+                    Ответьте честно на 10 вопросов и узнайте свой тип личности.
                 </p>
-                <button onclick="startTest()"
+                <button onclick="handleStartClick()"
                         class="telegram-login-btn"
                         style="display: inline-block; padding: 15px 30px; background: #0088cc; color: white; border: none; border-radius: 25px; cursor: pointer; font-weight: 600; text-decoration: none; font-size: 16px;">
                     🚀 Начать тест
@@ -438,22 +438,6 @@
             <div id="loading-screen" class="loading hidden">
                 <div class="spinner"></div>
                 <p>Загрузка...</p>
-            </div>
-
-            <!-- Welcome Screen -->
-            <div id="welcome-screen" class="hidden">
-                <div id="user-info" class="user-info">
-                    <div id="user-avatar" class="user-avatar"></div>
-                    <div class="user-details">
-                        <h3 id="user-name"></h3>
-                        <p id="user-username"></p>
-                    </div>
-                </div>
-                <p class="auth-description">
-                    Этот тест поможет определить, насколько вы сохранили человечность в эпоху цифровых технологий.
-                    Ответьте честно на 10 вопросов и узнайте свой тип личности.
-                </p>
-                <button class="start-btn" onclick="startTest()">Начать тест</button>
             </div>
 
             <!-- Test Screen -->
@@ -689,22 +673,11 @@
         function showAuthScreen() {
             hideAllScreens();
             document.getElementById('auth-screen').classList.remove('hidden');
+        }
 
-            // Простое решение: кнопка сразу запускает тест
-            window.startTest = function() {
-                // Создаем тестового пользователя
-                const testUser = {
-                    id: Date.now(),
-                    first_name: "Пользователь",
-                    last_name: "",
-                    username: "user" + Date.now(),
-                    auth_date: Math.floor(Date.now() / 1000)
-                };
-
-                // Запускаем тест
-                currentUser = testUser;
-                showQuestion();
-            };
+        function handleStartClick() {
+            // Сразу авторизуемся в demo режиме и запускаем тест
+            authenticateWithTelegram({ isDemo: true });
         }
 
         function authenticateWithTelegram(userData) {
@@ -722,7 +695,7 @@
                 if (data.sessionId) {
                     currentUser = data.user;
                     sessionId = data.sessionId;
-                    showWelcomeScreen();
+                    startTest();
                 } else {
                     showAuthError('Ошибка авторизации');
                 }
@@ -746,27 +719,8 @@
             errorEl.classList.remove('hidden');
         }
 
-        function showWelcomeScreen() {
-            hideAllScreens();
-            document.getElementById('welcome-screen').classList.remove('hidden');
-
-            // Заполняем информацию о пользователе
-            document.getElementById('user-name').textContent =
-                `${currentUser.first_name} ${currentUser.last_name || ''}`.trim();
-            document.getElementById('user-username').textContent =
-                currentUser.username ? `@${currentUser.username}` : `ID: ${currentUser.telegram_id}`;
-
-            // Аватар
-            const avatar = document.getElementById('user-avatar');
-            if (currentUser.photo_url) {
-                avatar.innerHTML = `<img src="${currentUser.photo_url}" style="width: 100%; height: 100%; border-radius: 50%;">`;
-            } else {
-                avatar.textContent = currentUser.first_name.charAt(0).toUpperCase();
-            }
-        }
-
         function hideAllScreens() {
-            document.querySelectorAll('.auth-screen, .loading, #welcome-screen, #test-screen, #result-screen').forEach(el => {
+            document.querySelectorAll('.auth-screen, .loading, #test-screen, #result-screen').forEach(el => {
                 el.classList.add('hidden');
             });
         }
