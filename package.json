@@ -1,7 +1,20 @@
 {
   "name": "biorobot-detector",
-  "version": "1.0.0", 
+  "version": "1.0.0",
+  "description": "Детектор Биоробота с Telegram авторизацией",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'No build needed for static site'",
+    "start": "vercel dev"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4"
+  },
+  "devDependencies": {
+    "vercel": "^34.0.0"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
