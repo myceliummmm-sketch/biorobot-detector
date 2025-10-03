@@ -646,22 +646,28 @@
         });
 
         function initApp() {
+            // Сначала показываем auth screen чтобы не было белого экрана
+            showAuthScreen();
+
             // Проверяем Telegram Web App
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe.user) {
+            if (window.Telegram && window.Telegram.WebApp) {
                 window.Telegram.WebApp.ready();
-                const user = window.Telegram.WebApp.initDataUnsafe.user;
-                // Авторизуемся через Telegram
-                authenticateWithTelegram({
-                    telegramId: user.id,
-                    firstName: user.first_name,
-                    lastName: user.last_name,
-                    username: user.username,
-                    languageCode: user.language_code
-                });
-            } else {
-                // Показываем кнопку для браузера
-                showAuthScreen();
+
+                const initData = window.Telegram.WebApp.initDataUnsafe;
+                if (initData && initData.user) {
+                    const user = initData.user;
+                    // Сразу авторизуемся через Telegram без кнопки
+                    authenticateWithTelegram({
+                        telegramId: user.id,
+                        firstName: user.first_name,
+                        lastName: user.last_name,
+                        username: user.username,
+                        languageCode: user.language_code
+                    });
+                }
+                // Если нет user данных - просто показываем кнопку
             }
+            // Если не в Telegram - показываем кнопку (уже показали выше)
         }
 
         function showAuthScreen() {
