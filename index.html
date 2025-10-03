@@ -706,8 +706,8 @@
             } else {
                 // Реальный Telegram Login Widget для продакшена
                 const loginBtn = document.getElementById('telegram-login');
-                loginBtn.style.display = 'none';
 
+                // Сначала пробуем загрузить Telegram Widget
                 const script = document.createElement('script');
                 script.async = true;
                 script.src = 'https://telegram.org/js/telegram-widget.js?22';
@@ -715,6 +715,24 @@
                 script.setAttribute('data-size', 'large');
                 script.setAttribute('data-onauth', 'onTelegramAuth(user)');
                 script.setAttribute('data-request-access', 'write');
+
+                // Если виджет не загрузился за 3 секунды, показываем fallback кнопку
+                let widgetLoaded = false;
+                script.onload = () => {
+                    widgetLoaded = true;
+                    loginBtn.style.display = 'none';
+                };
+
+                setTimeout(() => {
+                    if (!widgetLoaded) {
+                        // Fallback: показываем кнопку с переходом в бот
+                        loginBtn.innerHTML = '🤖 Открыть в Telegram';
+                        loginBtn.onclick = () => {
+                            window.open('https://t.me/mdao_community_bot/biorobot_detector', '_blank');
+                        };
+                        loginBtn.style.display = 'inline-block';
+                    }
+                }, 3000);
 
                 loginBtn.parentNode.insertBefore(script, loginBtn.nextSibling);
 
