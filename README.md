@@ -11,13 +11,26 @@
 - ✅ Адаптивный дизайн для всех устройств
 - ✅ Duolingo-стиль с анимациями
 
-## 🔗 Демо:
-[Открыть тест](https://biorobot-detector.vercel.app)
+## 🔗 Ссылки:
+
+### 🌐 Приложение
+- **[Открыть тест](https://biorobot-detector.vercel.app)**
+- **[Telegram Web App](https://t.me/mdao_community_bot/biorobot_detector)**
+- **[Telegram бот](https://t.me/mdao_community_bot)**
+
+### ⚙️ Настройка
+- **[Инструкции по настройке](SETUP_INSTRUCTIONS.md)**
+- **[Все ссылки проекта](LINKS.md)**
+- **[SQL скрипт для базы данных](setup_database.sql)**
+
+### 📊 Управление
+- **[Supabase Database](https://supabase.com/dashboard/project/qglmebqnyrauqcamhwio)**
+- **[Vercel Deployment](https://vercel.com/myceliummmm-sketch/biorobot-detector)**
 
 ## 🛠 Технологии:
-- Node.js + Express
-- SQLite
-- Telegram Bot API
+- Vercel Functions + PostgreSQL (Supabase)
+- Telegram Web App API
 - HTML5 + CSS3 + JavaScript
+- Duolingo-style UI/UX
 
 Made with ❤️ by Mycelium Team
