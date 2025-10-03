@@ -23,11 +23,27 @@
         .container {
             max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 15px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             justify-content: center;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+                justify-content: flex-start;
+                padding-top: 20px;
+            }
+
+            .title {
+                font-size: 1.8rem !important;
+            }
+
+            .subtitle {
+                font-size: 1rem !important;
+            }
         }
 
         .header {
@@ -665,22 +681,22 @@
                 window.Telegram.WebApp.ready();
 
                 // Если пользователь уже авторизован в Telegram Web App
-                if (window.Telegram.WebApp.initDataUnsafe.user) {
+                if (window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
                     const user = window.Telegram.WebApp.initDataUnsafe.user;
-                    // Передаем реальные данные Telegram пользователя
-                    authenticateWithTelegram({
-                        telegramId: user.id,
-                        firstName: user.first_name,
-                        lastName: user.last_name,
-                        username: user.username,
-                        languageCode: user.language_code
-                    });
+                    authenticateWithTelegram(user);
                 } else {
-                    authenticateWithTelegram({ isDemo: true });
+                    // Создаем тестового пользователя для Web App без данных
+                    const testUser = {
+                        id: Date.now(),
+                        first_name: "Telegram",
+                        last_name: "User",
+                        username: "tg_user"
+                    };
+                    authenticateWithTelegram(testUser);
                 }
             } else {
-                // Обычный веб-браузер - используем demo режим
-                authenticateWithTelegram({ isDemo: true });
+                // Обычный веб-браузер - показываем кнопку входа
+                showAuthScreen();
             }
         }
 
@@ -688,33 +704,34 @@
             hideAllScreens();
             document.getElementById('auth-screen').classList.remove('hidden');
 
-            // Для localhost используем тестовую кнопку, для продакшена - реальный Widget
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            // Показываем кнопку "Открыть в Telegram"
+            const loginBtn = document.getElementById('telegram-login');
+            loginBtn.innerHTML = `
+                <div style="text-align: center;">
+                    <button style="
+                        background: linear-gradient(135deg, #0088cc, #0066aa);
+                        color: white;
+                        border: none;
+                        padding: 15px 30px;
+                        border-radius: 25px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        cursor: pointer;
+                        box-shadow: 0 4px 15px rgba(0,136,204,0.3);
+                        transition: transform 0.2s;
+                    " onclick="openInTelegram()" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        📱 Открыть в Telegram
+                    </button>
+                    <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                        Для прохождения теста необходимо открыть приложение в Telegram
+                    </p>
+                </div>
+            `;
+        }
 
-            if (isLocalhost) {
-                // Тестовая авторизация для localhost
-                document.getElementById('telegram-login').addEventListener('click', () => {
-                    const testUser = {
-                        id: Date.now(),
-                        first_name: "Test",
-                        last_name: "User",
-                        username: "testuser",
-                        auth_date: Math.floor(Date.now() / 1000)
-                    };
-                    authenticateWithTelegram(testUser);
-                });
-            } else {
-                // Простое решение: всегда показываем рабочую кнопку
-                const loginBtn = document.getElementById('telegram-login');
-                loginBtn.innerHTML = '🤖 Открыть в Telegram';
-                loginBtn.onclick = () => {
-                    window.open('https://t.me/mdao_community_bot/biorobot_detector', '_blank');
-                };
-
-                window.onTelegramAuth = function(user) {
-                    authenticateWithTelegram(user);
-                };
-            }
+        function openInTelegram() {
+            const url = 'https://t.me/mdao_community_bot/biorobot_detector';
+            window.open(url, '_blank');
         }
 
         function authenticateWithTelegram(userData) {
@@ -729,12 +746,12 @@
             })
             .then(response => response.json())
             .then(data => {
-                if (data.sessionId) {
+                if (data.success) {
                     currentUser = data.user;
                     sessionId = data.sessionId;
                     showWelcomeScreen();
                 } else {
-                    showAuthError('Ошибка авторизации');
+                    showAuthError('Ошибка авторизации: ' + data.error);
                 }
             })
             .catch(error => {
@@ -751,10 +768,30 @@
         function showAuthError(message) {
             hideAllScreens();
             document.getElementById('auth-screen').classList.remove('hidden');
-            const errorEl = document.getElementById('auth-error');
-            errorEl.textContent = message;
-            errorEl.classList.remove('hidden');
+            const loginBtn = document.getElementById('telegram-login');
+            loginBtn.innerHTML = `
+                <div style="text-align: center;">
+                    <div style="color: #ff4444; margin-bottom: 15px; font-weight: bold;">
+                        ${message}
+                    </div>
+                    <button style="
+                        background: linear-gradient(135deg, #0088cc, #0066aa);
+                        color: white;
+                        border: none;
+                        padding: 15px 30px;
+                        border-radius: 25px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        cursor: pointer;
+                        box-shadow: 0 4px 15px rgba(0,136,204,0.3);
+                        transition: transform 0.2s;
+                    " onclick="location.reload()" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        🔄 Попробовать снова
+                    </button>
+                </div>
+            `;
         }
+
 
         function showWelcomeScreen() {
             hideAllScreens();
@@ -809,7 +846,7 @@
 
             updateProgress();
 
-            // No next button to reset anymore
+            // Автоматический переход к следующему вопросу
         }
 
         function selectAnswer(answerIndex) {
@@ -820,10 +857,10 @@
             document.querySelectorAll('.answer-option')[answerIndex].classList.add('selected');
             answers[currentQuestion] = answerIndex;
 
-            // Auto-advance to next question after a short delay
+            // Сразу переходим к следующему вопросу
             setTimeout(() => {
                 nextQuestion();
-            }, 800);
+            }, 300);
         }
 
         function nextQuestion() {
@@ -853,7 +890,7 @@
 
         function showResult() {
             hideAllScreens();
-            document.getElementById('result-screen').style.display = 'block';
+            document.getElementById('result-screen').classList.remove('hidden');
 
             const resultType = resultTypes.find(type =>
                 totalScore >= type.minScore && totalScore <= type.maxScore
