@@ -31,18 +31,12 @@ module.exports = async (req, res) => {
         // Verify session and get user ID
         const { data: session, error: sessionError } = await supabase
             .from('sessions')
-            .select('id, user_id, expires_at, is_active')
+            .select('id, user_id')
             .eq('session_token', sessionId)
-            .eq('is_active', true)
             .single();
 
         if (sessionError || !session) {
             return res.status(401).json({ error: 'Invalid session' });
-        }
-
-        // Check if session is expired
-        if (new Date(session.expires_at) < new Date()) {
-            return res.status(401).json({ error: 'Session expired' });
         }
 
         // Save test result

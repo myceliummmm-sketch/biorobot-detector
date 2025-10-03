@@ -14,8 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
 -- Таблица сессий
 CREATE TABLE IF NOT EXISTS sessions (
     id bigserial PRIMARY KEY,
-    session_id text UNIQUE NOT NULL,
+    session_token text UNIQUE NOT NULL,
     user_id bigint REFERENCES users(id) ON DELETE CASCADE,
+    expires_at timestamp with time zone DEFAULT (now() + interval '24 hours'),
     created_at timestamp with time zone DEFAULT now()
 );
 
@@ -31,7 +32,7 @@ CREATE TABLE IF NOT EXISTS test_results (
 
 -- Индексы для оптимизации
 CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_session_token ON sessions(session_token);
 CREATE INDEX IF NOT EXISTS idx_test_results_user_id ON test_results(user_id);
 CREATE INDEX IF NOT EXISTS idx_test_results_completed_at ON test_results(completed_at);
 

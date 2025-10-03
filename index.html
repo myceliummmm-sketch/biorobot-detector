@@ -818,12 +818,12 @@
             fetch('/api/test/result', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-Session-ID': sessionId
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
+                    sessionId: sessionId,
                     score: score,
-                    result_type: resultType,
+                    resultType: resultType,
                     answers: testAnswers
                 })
             })
