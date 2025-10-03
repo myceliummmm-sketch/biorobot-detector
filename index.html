@@ -440,6 +440,20 @@
                 <p>Загрузка...</p>
             </div>
 
+            <!-- Welcome Screen -->
+            <div id="welcome-screen" style="display: none;">
+                <h2 style="text-align: center; color: #333; margin-bottom: 30px;">
+                    Привет, <span id="user-name"></span>!
+                </h2>
+                <p class="auth-description">
+                    Этот тест поможет определить, насколько вы сохранили человечность в эпоху цифровых технологий.
+                    Ответьте честно на 10 вопросов и узнайте свой тип личности.
+                </p>
+                <button class="telegram-login-btn" onclick="startTest()" style="margin-top: 20px;">
+                    Начать тест
+                </button>
+            </div>
+
             <!-- Test Screen -->
             <div id="test-screen" style="display: none;">
                 <div class="progress-container">
@@ -695,7 +709,7 @@
                 if (data.sessionId) {
                     currentUser = data.user;
                     sessionId = data.sessionId;
-                    startTest();
+                    showWelcomeScreen();
                 } else {
                     showAuthError('Ошибка авторизации');
                 }
@@ -711,6 +725,15 @@
             document.getElementById('loading-screen').style.display = 'flex';
         }
 
+        function showWelcomeScreen() {
+            hideAllScreens();
+            document.getElementById('welcome-screen').style.display = 'block';
+
+            // Показываем имя пользователя
+            const userName = currentUser.first_name || 'Пользователь';
+            document.getElementById('user-name').textContent = userName;
+        }
+
         function showAuthError(message) {
             hideAllScreens();
             document.getElementById('auth-screen').style.display = 'block';
@@ -722,6 +745,7 @@
         function hideAllScreens() {
             document.getElementById('auth-screen').style.display = 'none';
             document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('welcome-screen').style.display = 'none';
             document.getElementById('test-screen').style.display = 'none';
             document.getElementById('result-screen').style.display = 'none';
         }
