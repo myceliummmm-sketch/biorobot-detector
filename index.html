@@ -646,28 +646,8 @@
         });
 
         function initApp() {
-            // Проверяем, запущено ли приложение в Telegram Web App
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.ready();
-
-                // Если пользователь уже авторизован в Telegram Web App
-                if (window.Telegram.WebApp.initDataUnsafe.user) {
-                    const user = window.Telegram.WebApp.initDataUnsafe.user;
-                    // Передаем реальные данные Telegram пользователя
-                    authenticateWithTelegram({
-                        telegramId: user.id,
-                        firstName: user.first_name,
-                        lastName: user.last_name,
-                        username: user.username,
-                        languageCode: user.language_code
-                    });
-                } else {
-                    authenticateWithTelegram({ isDemo: true });
-                }
-            } else {
-                // Обычный веб-браузер - используем demo режим
-                authenticateWithTelegram({ isDemo: true });
-            }
+            // Показываем экран авторизации
+            showAuthScreen();
         }
 
         function showAuthScreen() {
