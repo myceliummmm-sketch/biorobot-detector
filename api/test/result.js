@@ -1,58 +1,80 @@
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY
+);
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+module.exports = async (req, res) => {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  try {
-    const { score, result_type, answers } = req.body;
-    const sessionId = req.headers['x-session-id'];
-
-    if (!sessionId) {
-      return res.status(401).json({ error: 'Session ID required' });
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
     }
 
-    // Находим пользователя по сессии
-    const { data: session, error: sessionError } = await supabase
-      .from('sessions')
-      .select('user_id')
-      .eq('session_id', sessionId)
-      .single();
-
-    if (sessionError || !session) {
-      return res.status(401).json({ error: 'Invalid session' });
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Сохраняем результат теста
-    const { data: result, error: insertError } = await supabase
-      .from('test_results')
-      .insert([{
-        user_id: session.user_id,
-        score: score,
-        result_type: result_type,
-        answers: JSON.stringify(answers),
-        completed_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
+    try {
+        const { sessionId, answers, score, resultType, resultTitle, resultDescription } = req.body;
 
-    if (insertError) throw insertError;
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Session ID is required' });
+        }
 
-    res.status(200).json({
-      success: true,
-      result_id: result.id
-    });
+        // Verify session and get user ID
+        const { data: session, error: sessionError } = await supabase
+            .from('sessions')
+            .select('id, user_id, expires_at, is_active')
+            .eq('session_token', sessionId)
+            .eq('is_active', true)
+            .single();
 
-  } catch (error) {
-    console.error('Save result error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to save result'
-    });
-  }
-}
+        if (sessionError || !session) {
+            return res.status(401).json({ error: 'Invalid session' });
+        }
+
+        // Check if session is expired
+        if (new Date(session.expires_at) < new Date()) {
+            return res.status(401).json({ error: 'Session expired' });
+        }
+
+        // Save test result
+        const testResult = {
+            user_id: session.user_id,
+            session_id: session.id,
+            answers: answers,
+            score: score,
+            result_type: resultType,
+            result_title: resultTitle,
+            result_description: resultDescription
+        };
+
+        const { data: result, error: resultError } = await supabase
+            .from('test_results')
+            .insert(testResult)
+            .select()
+            .single();
+
+        if (resultError) {
+            console.error('Test result save error:', resultError);
+            return res.status(500).json({ error: 'Failed to save test result' });
+        }
+
+        res.status(200).json({
+            success: true,
+            resultId: result.id,
+            message: 'Test result saved successfully'
+        });
+
+    } catch (error) {
+        console.error('Test result API error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
