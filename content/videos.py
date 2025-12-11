@@ -12,7 +12,7 @@ VIDEOS = {
     # Prisma
     "prisma_social_proof": None,
     "prisma_demo": None,
-    "prisma_blocker": None,
+    "prisma_blocker": "BAACAgIAAxkBAAII-mk65B9TMNi35y1Vh55d9n8tYHR7AAImjwACOOPYSRfGiIMUVZkpNgQ",
 
     # Toxic
     "toxic_risks": "BAACAgIAAxkBAAII82k64YQ9xpYj6BQHB2fN3vU4dkqPAAIGjwACOOPYSR7DcIyk2S3-NgQ",
