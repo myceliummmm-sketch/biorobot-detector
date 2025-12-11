@@ -1,5 +1,6 @@
 import json
 import logging
+import traceback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -152,12 +153,27 @@ async def quiz_result_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     except Exception as e:
         logger.error(f"Error in quiz handler: {e}")
-        # Fallback response on any error
-        await update.message.reply_text(
-            f"🎯 {user.first_name or 'Друг'}, спасибо за прохождение теста!\n\nТвой результат обработан. Начни Vision Phase 👇",
-            reply_markup=InlineKeyboardMarkup([[
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        # Send result with what we have, even if DB failed
+        try:
+            char_key, char_name = BLOCKER_TO_CHARACTER.get(blocker, ("ever", "Ever Green"))
+            text = RESULT_WITH_BLOCKER.format(
+                name=user.first_name or "друг",
+                score=score,
+                blocker=blocker,
+                char_name=char_name
+            )
+            keyboard = InlineKeyboardMarkup([[
                 InlineKeyboardButton("✨ Начать Vision Phase", url=MYCELIUM_APP_URL)
             ]])
-        )
+            await update.message.reply_text(text=text, reply_markup=keyboard)
+        except:
+            # Ultimate fallback
+            await update.message.reply_text(
+                f"🎯 {user.first_name or 'Друг'}, спасибо за прохождение теста!\n\nНачни Vision Phase 👇",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✨ Начать Vision Phase", url=MYCELIUM_APP_URL)
+                ]])
+            )
     finally:
         db.close()
