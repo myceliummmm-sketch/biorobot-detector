@@ -3,7 +3,7 @@
 
 VIDEOS = {
     # Welcome & Reminders (Ever)
-    "ever_welcome": None,  # FILE_ID после загрузки
+    "ever_welcome": "BAACAgIAAxkBAAII1Wk6zffMelsXB0ogeQRzmiiSx3MGAALrjQACOOPYSSR512CPryBpNgQ",
     "ever_reminder": None,
     "ever_vision_preview": None,
     "ever_urgency": None,
