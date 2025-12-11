@@ -7,7 +7,7 @@ VIDEOS = {
     "ever_reminder": "BAACAgIAAxkBAAII6Wk61AOfWvLJYbFAYTZ-pYwfEf4MAAJBjgACOOPYSXCLRkmd2ifeNgQ",
     "ever_vision_preview": "BAACAgIAAxkBAAII7Wk63xLmFGFqUxUxut720iryRCpZAALkjgACOOPYSZD3m-OeQ-vINgQ",
     "ever_urgency": None,
-    "ever_blocker": None,  # Для блокировок: "Туманное видение", "Паралич старта"
+    "ever_blocker": "BAACAgIAAxkBAAII92k640nXXut5xMcs6sboJyTLsK9kAAIdjwACOOPYSRcIP0w4vASjNgQ",
 
     # Prisma
     "prisma_social_proof": None,
