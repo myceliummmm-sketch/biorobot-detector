@@ -16,7 +16,7 @@ VIDEOS = {
 
     # Toxic
     "toxic_risks": "BAACAgIAAxkBAAII82k64YQ9xpYj6BQHB2fN3vU4dkqPAAIGjwACOOPYSR7DcIyk2S3-NgQ",
-    "toxic_blocker": None,
+    "toxic_blocker": "BAACAgIAAxkBAAIJDWk658sLogFMDzD1YbGokF3xbJCiAAJ8jwACOOPYSQs32zFvQ12YNgQ",
 
     # Tech Priest
     "tech_demo": None,
@@ -25,7 +25,7 @@ VIDEOS = {
     # Phoenix
     "phoenix_marketing": None,
     "phoenix_fomo": None,
-    "phoenix_success": None,
+    "phoenix_success": "BAACAgIAAxkBAAIJGGk66FwQSHAb76fw7s1umHhVpy80AAKJjwACOOPYSedT8csFGCIzNgQ",
 
     # Zen
     "zen_gentle": None,
