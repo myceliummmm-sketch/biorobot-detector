@@ -24,27 +24,44 @@ BLOCKER_TO_CHARACTER = {
 }
 
 
-def determine_blocker(answers: dict) -> str:
-    """Determine user's main blocker based on quiz answers"""
-    idea = answers.get('idea', '')
-    experience = answers.get('experience', '')
-    priority = answers.get('priority', '')
-    time_ans = answers.get('time', '')
+def determine_blocker(answers) -> str:
+    """Determine user's main blocker based on quiz answers.
 
-    if idea == 'none':
+    answers: list of 4 answer indices [q1, q2, q3, q4] where each is 0, 1, or 2
+
+    Questions mapping (adjust based on actual quiz):
+    Q1 (idea clarity): 0=clear, 1=vague, 2=none
+    Q2 (experience): 0=experienced, 1=tried_failed, 2=newbie
+    Q3 (priority): 0=speed, 1=balance, 2=perfect
+    Q4 (time): 0=10+, 1=5-10, 2=2-5
+    """
+    if not answers or not isinstance(answers, list) or len(answers) < 4:
+        return "Паралич старта"
+
+    q1, q2, q3, q4 = answers[0], answers[1], answers[2], answers[3]
+
+    # Q1: Idea clarity
+    if q1 == 2:  # No idea
         return "Страх выбора"
-    if idea == 'vague':
+    if q1 == 1:  # Vague idea
         return "Туманное видение"
-    if experience == 'newbie':
+
+    # Q2: Experience
+    if q2 == 2:  # Newbie
         return "Синдром самозванца"
-    if experience == 'tried':
+    if q2 == 1:  # Tried and failed
         return "Страх повторить провал"
-    if priority == 'perfect':
+
+    # Q3: Priority
+    if q3 == 2:  # Perfect
         return "Паралич перфекционизма"
-    if priority == 'balance':
+    if q3 == 1:  # Balance
         return "Паралич анализа"
-    if time_ans == '2-5':
+
+    # Q4: Time
+    if q4 == 2:  # 2-5 hours
         return "Нехватка времени"
+
     return "Паралич старта"
 
 
