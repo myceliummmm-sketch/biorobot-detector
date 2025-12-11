@@ -4,9 +4,10 @@
 VIDEOS = {
     # Welcome & Reminders (Ever)
     "ever_welcome": "BAACAgIAAxkBAAII1Wk6zffMelsXB0ogeQRzmiiSx3MGAALrjQACOOPYSSR512CPryBpNgQ",
-    "ever_reminder": None,
+    "ever_reminder": "BAACAgIAAxkBAAII6Wk61AOfWvLJYbFAYTZ-pYwfEf4MAAJBjgACOOPYSXCLRkmd2ifeNgQ",
     "ever_vision_preview": None,
     "ever_urgency": None,
+    "ever_blocker": None,  # Для блокировок: "Туманное видение", "Паралич старта"
 
     # Prisma
     "prisma_social_proof": None,
