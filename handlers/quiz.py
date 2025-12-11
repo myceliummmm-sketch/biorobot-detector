@@ -137,13 +137,21 @@ async def quiz_result_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         ]])
 
         video_id = VIDEOS.get(video_key)
+        logger.info(f"Looking for video: key={video_key}, found={video_id is not None}")
+
         if video_id:
-            await update.message.reply_video(
-                video=video_id,
-                caption=text,
-                reply_markup=keyboard
-            )
+            try:
+                await update.message.reply_video(
+                    video=video_id,
+                    caption=text,
+                    reply_markup=keyboard
+                )
+                logger.info(f"Video sent successfully: {video_key}")
+            except Exception as video_err:
+                logger.error(f"Failed to send video {video_key}: {video_err}")
+                await update.message.reply_text(text=text, reply_markup=keyboard)
         else:
+            logger.warning(f"No video found for key: {video_key}")
             await update.message.reply_text(text=text, reply_markup=keyboard)
 
         logger.info(f"Sent quiz result to user {user.id}")
