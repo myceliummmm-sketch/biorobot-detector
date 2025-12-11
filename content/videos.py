@@ -20,7 +20,7 @@ VIDEOS = {
 
     # Tech Priest
     "tech_demo": None,
-    "tech_priest_blocker": None,
+    "tech_priest_blocker": "BAACAgIAAxkBAAIJAWk65SsFAR7GQjJ-smXj9sDNj79iAAI7jwACOOPYSYE8hZgd0j00NgQ",
 
     # Phoenix
     "phoenix_marketing": None,
@@ -29,7 +29,7 @@ VIDEOS = {
 
     # Zen
     "zen_gentle": None,
-    "zen_blocker": None,
+    "zen_blocker": "BAACAgIAAxkBAAIJA2k65Vrhu-lKkrmKWqCuLphhVngsAAI-jwACOOPYSRalaG2hSTs-NgQ",
 
     # Case study
     "case_study": "BAACAgIAAxkBAAII9Wk64b-Lybp-oiAt3m6lkb3pUETbAAILjwACOOPYSZg7XruiYmSbNgQ",
