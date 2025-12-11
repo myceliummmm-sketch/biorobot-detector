@@ -1,5 +1,6 @@
 from .start import start_handler
 from .quiz import quiz_result_handler, determine_blocker, BLOCKER_TO_CHARACTER
+from .video import video_handler
 from .sequences import (
     send_sequence_a_message,
     send_sequence_b_message,
@@ -13,6 +14,7 @@ from .sequences import (
 __all__ = [
     "start_handler",
     "quiz_result_handler",
+    "video_handler",
     "determine_blocker",
     "BLOCKER_TO_CHARACTER",
     "send_sequence_a_message",

@@ -4,7 +4,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from config import BOT_TOKEN, DATABASE_URL
 from database import init_db
-from handlers import start_handler, quiz_result_handler
+from handlers import start_handler, quiz_result_handler, video_handler
 
 # Configure logging
 logging.basicConfig(
@@ -35,6 +35,7 @@ def main():
         filters.StatusUpdate.WEB_APP_DATA,
         quiz_result_handler
     ))
+    app.add_handler(MessageHandler(filters.VIDEO, video_handler))
 
     # Start polling
     logger.info("Bot starting... Press Ctrl+C to stop.")
