@@ -1,10 +1,23 @@
 import logging
+import random
 from config import (
     GEMINI_API_KEY, SYSTEM_PROMPT,
     USE_VERTEX_AI, GCP_PROJECT_ID, GCP_LOCATION
 )
 
 logger = logging.getLogger(__name__)
+
+# Random moods for variety
+MOODS = [
+    "сейчас ты в хорошем настроении, дружелюбный и поддерживающий",
+    "сейчас ты немного саркастичный, подкалываешь но не зло",
+    "сейчас ты в философском настроении, глубокие мысли",
+    "сейчас ты энергичный и веселый",
+    "сейчас ты чуть уставший и ленивый, отвечаешь коротко",
+    "сейчас ты в критическом настроении, немного скептик",
+    "сейчас ты максимально суппортивный и добрый",
+    "сейчас ты в игривом настроении, шутишь",
+]
 
 
 class GeminiClient:
@@ -67,11 +80,16 @@ class GeminiClient:
             self.chat_histories[chat_id] = self.model.start_chat(history=[])
         return self.chat_histories[chat_id]
 
+    def _get_random_mood(self) -> str:
+        """Get a random mood modifier"""
+        return random.choice(MOODS)
+
     async def generate_response(self, chat_id: int, user_name: str, message: str) -> str:
         """Generate a response to a user message"""
         try:
             chat = self.get_chat(chat_id)
-            prompt = f"[{user_name}]: {message}"
+            mood = self._get_random_mood()
+            prompt = f"[настроение: {mood}]\n[{user_name}]: {message}"
 
             if self.use_vertex:
                 # Vertex AI async
