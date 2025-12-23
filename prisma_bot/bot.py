@@ -165,10 +165,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start"""
     await update.message.reply_text(
-        "🔮 привет! я prisma — ai со-основатель и операционщица mycelium.\n\n"
-        "буду помогать следить за прогрессом, подсказывать если застрянете, "
-        "и держать фокус на главном.\n\n"
-        "тегни меня когда нужен совет или хочешь обсудить идею ~"
+        "○ привет! я prisma — ai операционщица mycelium.\n\n"
+        "помогаю с прогрессом и держу фокус. тегни когда нужен совет ▸"
     )
 
 
@@ -177,13 +175,11 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     silence = get_silence_duration(chat_id)
 
-    status = "активен ✨" if silence < SILENCE_KICK_HOURS else "притих 💤" if silence < SILENCE_ALARM_HOURS else "давно тихо ⚡"
+    status = "активен ✨" if silence < SILENCE_KICK_HOURS else "притих 💤" if silence < SILENCE_ALARM_HOURS else "тихо ⚡"
 
     await update.message.reply_text(
-        f"~ статус чата: {status}\n"
-        f"// тишина: {silence:.1f} часов\n"
-        f"-> мягкий пинг после: {SILENCE_KICK_HOURS}ч\n"
-        f"-> активный пинг после: {SILENCE_ALARM_HOURS}ч"
+        f"▸ статус: {status}\n"
+        f"○ тишина: {silence:.1f}ч"
     )
 
 
