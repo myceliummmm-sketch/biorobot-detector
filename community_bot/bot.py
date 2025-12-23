@@ -54,9 +54,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"Message from {user.first_name} in chat {chat_id}: {message.text[:100]}")
 
-    # Skip bot's own messages
-    if user.is_bot:
-        logger.info("Skipping bot message")
+    # Skip bot's own messages (but allow channel forwards)
+    if user.is_bot and user.id == (await context.bot.get_me()).id:
+        logger.info("Skipping own bot message")
         return
 
     # Check if this is a reply to the bot
