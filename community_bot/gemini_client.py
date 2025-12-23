@@ -26,7 +26,7 @@ class GeminiClient:
         genai.configure(api_key=GEMINI_API_KEY)
 
         self.model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+            model_name="gemini-3-flash",
             system_instruction=SYSTEM_PROMPT,
             generation_config={
                 "temperature": 0.9,
@@ -49,7 +49,7 @@ class GeminiClient:
         vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
 
         self.model = GenerativeModel(
-            model_name="gemini-2.5-flash",
+            model_name="gemini-3-flash",
             system_instruction=SYSTEM_PROMPT,
             generation_config=GenerationConfig(
                 temperature=0.9,
