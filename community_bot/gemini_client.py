@@ -32,7 +32,7 @@ class GeminiClient:
                 "temperature": 0.9,
                 "top_p": 0.95,
                 "top_k": 40,
-                "max_output_tokens": 256,
+                "max_output_tokens": 1024,
             }
         )
         self.use_vertex = False
