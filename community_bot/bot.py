@@ -41,15 +41,22 @@ def should_respond(message_text: str, is_reply_to_bot: bool, is_mention: bool) -
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle incoming messages in group chat"""
+    # Log ALL incoming updates for debugging
+    logger.info(f"=== RECEIVED UPDATE: {update}")
+
     message = update.message
     if not message or not message.text:
+        logger.info("No message or text, skipping")
         return
 
     chat_id = message.chat_id
     user = message.from_user
 
+    logger.info(f"Message from {user.first_name} in chat {chat_id}: {message.text[:100]}")
+
     # Skip bot's own messages
     if user.is_bot:
+        logger.info("Skipping bot message")
         return
 
     # Check if this is a reply to the bot
