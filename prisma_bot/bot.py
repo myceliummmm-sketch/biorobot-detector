@@ -8,6 +8,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from config import (
     PRISMA_BOT_TOKEN,
     BOT_NAME,
+    BOT_NAMES,
+    TRIGGER_KEYWORDS,
     SILENCE_KICK_HOURS,
     SILENCE_ALARM_HOURS,
     RANDOM_INSIGHT_CHANCE,
@@ -54,15 +56,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Check if bot should respond
     bot_username = (await context.bot.get_me()).username
+    text_lower = message.text.lower()
+
     is_reply_to_bot = (
         message.reply_to_message and
         message.reply_to_message.from_user and
         message.reply_to_message.from_user.id == context.bot.id
     )
     is_mention = f"@{bot_username}" in message.text if bot_username else False
-    is_called = any(name in message.text.lower() for name in ["prisma", "призма", "присма"])
+    is_called = any(name in text_lower for name in BOT_NAMES)
+    has_keyword = any(keyword in text_lower for keyword in TRIGGER_KEYWORDS)
 
-    if not (is_reply_to_bot or is_mention or is_called):
+    # Always respond to direct calls, mentions, replies
+    # 30% chance to respond to keywords
+    if is_reply_to_bot or is_mention or is_called:
+        pass  # Respond
+    elif has_keyword and random.random() < 0.3:
+        pass  # 30% chance on keywords
+    else:
         return
 
     logger.info(f"Responding to {user_name}")
@@ -106,13 +117,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Check if should respond
     bot_username = (await context.bot.get_me()).username
+    caption_lower = caption.lower()
+
     is_reply_to_bot = (
         message.reply_to_message and
         message.reply_to_message.from_user and
         message.reply_to_message.from_user.id == context.bot.id
     )
     is_mention = f"@{bot_username}" in caption if bot_username else False
-    is_called = any(name in caption.lower() for name in ["prisma", "призма", "присма"])
+    is_called = any(name in caption_lower for name in BOT_NAMES)
 
     if not (is_reply_to_bot or is_mention or is_called):
         return
