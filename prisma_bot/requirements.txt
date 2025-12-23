@@ -1,0 +1,6 @@
+python-telegram-bot[job-queue]==21.0
+google-generativeai>=0.8.0
+python-dotenv>=1.0.0
+Pillow>=10.0.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
