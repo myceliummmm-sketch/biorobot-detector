@@ -90,6 +90,26 @@ class GeminiClient:
             logger.error(f"Gemini API error: {e}")
             return self._get_fallback_response()
 
+    async def generate_response_with_image(self, chat_id: int, user_name: str, message: str, image_bytes: bytes) -> str:
+        """Generate a response to an image with optional text"""
+        try:
+            import PIL.Image
+            import io
+
+            # Convert bytes to PIL Image
+            image = PIL.Image.open(io.BytesIO(image_bytes))
+
+            prompt = f"[{user_name}] прислал фото и написал: {message}"
+
+            # Generate response with image (use model directly, not chat for multimodal)
+            response = self.model.generate_content([prompt, image])
+
+            return response.text.strip()
+
+        except Exception as e:
+            logger.error(f"Gemini API error (image): {e}")
+            return self._get_fallback_response()
+
     def _get_fallback_response(self) -> str:
         """Fallback responses when API fails"""
         import random

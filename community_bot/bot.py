@@ -100,6 +100,67 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error generating response: {e}")
 
 
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle incoming photos in group chat"""
+    message = update.message
+    if not message or not message.photo:
+        return
+
+    chat_id = message.chat_id
+    user = message.from_user
+
+    # Skip bot's own messages
+    if user.is_bot and user.id == (await context.bot.get_me()).id:
+        return
+
+    # Check if bot should respond to this photo
+    caption = message.caption or ""
+    is_reply_to_bot = (
+        message.reply_to_message and
+        message.reply_to_message.from_user and
+        message.reply_to_message.from_user.id == context.bot.id
+    )
+
+    bot_username = (await context.bot.get_me()).username
+    is_mention = f"@{bot_username}" in caption if bot_username else False
+
+    text_lower = caption.lower()
+    is_called_by_name = any(name in text_lower for name in ["toxic", "токсик", "токсика", "токсику"])
+
+    # Only respond to photos if explicitly mentioned or replied to
+    if not (is_reply_to_bot or is_mention or is_called_by_name):
+        # Small random chance to comment on photos anyway
+        if random.random() > 0.1:  # 10% chance
+            return
+
+    logger.info(f"Processing photo from {user.first_name}")
+
+    # Show typing indicator
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    try:
+        # Get the largest photo
+        photo = message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+
+        # Download photo bytes
+        photo_bytes = await file.download_as_bytearray()
+
+        gemini = get_gemini_client()
+        user_name = user.first_name or user.username or "Аноним"
+
+        # Generate response with image
+        response = await gemini.generate_response_with_image(
+            chat_id, user_name, caption or "что скажешь про это фото?", bytes(photo_bytes)
+        )
+
+        await message.reply_text(response)
+        logger.info(f"Sent photo response: {response[:50]}...")
+
+    except Exception as e:
+        logger.error(f"Error processing photo: {e}")
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
     await update.message.reply_text(
@@ -150,6 +211,12 @@ def main():
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
         handle_message
+    ))
+
+    # Photo handler
+    app.add_handler(MessageHandler(
+        filters.PHOTO,
+        handle_photo
     ))
 
     # Start polling
