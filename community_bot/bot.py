@@ -59,12 +59,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message.reply_to_message.from_user.id == context.bot.id
     )
 
-    # Check if bot is mentioned
+    # Check if bot is mentioned by @username
     bot_username = (await context.bot.get_me()).username
     is_mention = f"@{bot_username}" in message.text if bot_username else False
 
+    # Check if bot is called by name (toxic, токсик)
+    text_lower = message.text.lower()
+    is_called_by_name = any(name in text_lower for name in ["toxic", "токсик", "токсика", "токсику"])
+
     # Decide if we should respond
-    if not should_respond(message.text, is_reply_to_bot, is_mention):
+    if not should_respond(message.text, is_reply_to_bot, is_mention or is_called_by_name):
         return
 
     logger.info(f"Responding to message from {user.first_name}: {message.text[:50]}...")
