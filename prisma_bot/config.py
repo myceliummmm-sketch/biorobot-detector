@@ -135,3 +135,37 @@ SILENCE_KICK_HOURS = 4  # Hours of silence before gentle kick
 SILENCE_ALARM_HOURS = 24  # Hours of silence before dramatic alarm
 RANDOM_INSIGHT_CHANCE = 0.05  # 5% chance for random insight
 PROACTIVE_CHECK_MINUTES = 30  # Check every 30 minutes
+
+# Daily check-in schedule (UTC times - adjust for your timezone)
+# Spain/Torremolinos is UTC+1 (winter) / UTC+2 (summer)
+TIMEZONE = "Europe/Madrid"  # Spain timezone
+
+DAILY_CHECKINS = [
+    {"hour": 9, "minute": 0, "type": "morning"},    # 9:00 - утренний отчет
+    {"hour": 14, "minute": 0, "type": "afternoon"}, # 14:00 - дневной чекин
+    {"hour": 19, "minute": 0, "type": "evening"},   # 19:00 - вечерний чекин
+]
+
+# Google Docs settings
+GOOGLE_DOCS_FOLDER_ID = os.getenv("GOOGLE_DOCS_FOLDER_ID", "")  # ID папки с документами
+
+# Check-in prompts for Gemini
+CHECKIN_PROMPTS = {
+    "morning": """утренний чекин. сгенерируй:
+1. краткий статус по последним сообщениям в чате
+2. напоминание о главных приоритетах на сегодня
+3. мотивирующий пинок для команды
+будь краткой, по делу, с минимум эмодзи (только ◆ ▸ ● ○)""",
+
+    "afternoon": """дневной чекин. сгенерируй:
+1. спроси как дела с задачами на сегодня
+2. предложи помощь если кто-то застрял
+3. напомни про деньги/продажи если давно не обсуждали
+будь краткой, по делу""",
+
+    "evening": """вечерний чекин. сгенерируй:
+1. спроси что успели сделать за день
+2. узнай планы на завтра
+3. подведи мини-итог если есть что сказать
+будь краткой, дружелюбной но продуктивной"""
+}

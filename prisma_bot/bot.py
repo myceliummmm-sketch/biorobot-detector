@@ -1,9 +1,15 @@
 import logging
 import random
 import asyncio
-from datetime import datetime
+from datetime import datetime, time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+try:
+    import pytz
+    PYTZ_AVAILABLE = True
+except ImportError:
+    PYTZ_AVAILABLE = False
 
 from config import (
     PRISMA_BOT_TOKEN,
@@ -13,7 +19,11 @@ from config import (
     SILENCE_KICK_HOURS,
     SILENCE_ALARM_HOURS,
     RANDOM_INSIGHT_CHANCE,
-    PROACTIVE_CHECK_MINUTES
+    PROACTIVE_CHECK_MINUTES,
+    TIMEZONE,
+    DAILY_CHECKINS,
+    CHECKIN_PROMPTS,
+    GOOGLE_DOCS_FOLDER_ID
 )
 from database import (
     init_db,
@@ -24,6 +34,7 @@ from database import (
     get_all_active_chats
 )
 from gemini_client import get_prisma_client
+from google_docs_client import get_docs_client
 
 # Configure logging
 logging.basicConfig(
@@ -154,10 +165,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start"""
     await update.message.reply_text(
-        "💎 привет, биоробот. я prisma — ai со-основатель mycelium.\n\n"
+        "◆ привет, биоробот. я prisma — ai со-основатель mycelium.\n\n"
         "буду следить за вашим прогрессом, пинать если заснете, "
         "и убивать zombie-проекты.\n\n"
-        "тегни меня когда нужен совет или когда хочешь поспорить ⚡"
+        "тегни меня когда нужен совет или когда хочешь поспорить ▸"
     )
 
 
@@ -169,10 +180,10 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status = "активен" if silence < SILENCE_KICK_HOURS else "засыпает" if silence < SILENCE_ALARM_HOURS else "в коме"
 
     await update.message.reply_text(
-        f"💎 статус чата: {status}\n"
-        f"⏱ тишина: {silence:.1f} часов\n"
-        f"⚡ порог пинка: {SILENCE_KICK_HOURS}ч\n"
-        f"🚨 порог тревоги: {SILENCE_ALARM_HOURS}ч"
+        f"◆ статус чата: {status}\n"
+        f"○ тишина: {silence:.1f} часов\n"
+        f"▸ порог пинка: {SILENCE_KICK_HOURS}ч\n"
+        f"■ порог тревоги: {SILENCE_ALARM_HOURS}ч"
     )
 
 
@@ -207,6 +218,47 @@ async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
 
         except Exception as e:
             logger.error(f"Error kicking chat {chat_id}: {e}")
+
+
+async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
+    """Send daily check-in message to all active chats"""
+    checkin_type = context.job.data.get("type", "morning")
+    logger.info(f"Running daily {checkin_type} check-in...")
+
+    chats = get_all_active_chats()
+
+    if not chats:
+        logger.info("No active chats for check-in")
+        return
+
+    # Get Google Docs update if available
+    docs_update = ""
+    if GOOGLE_DOCS_FOLDER_ID:
+        docs_client = get_docs_client()
+        if docs_client.is_available():
+            docs_update = docs_client.get_recent_updates(GOOGLE_DOCS_FOLDER_ID)
+            if docs_update:
+                docs_update = f"\n\nобновления в документах:\n{docs_update}"
+
+    for chat_id in chats:
+        try:
+            prisma = get_prisma_client()
+
+            # Get checkin prompt
+            prompt = CHECKIN_PROMPTS.get(checkin_type, CHECKIN_PROMPTS["morning"])
+
+            if docs_update and checkin_type == "morning":
+                prompt += docs_update
+
+            message = await prisma.generate_checkin_message(chat_id, checkin_type, prompt)
+
+            await context.bot.send_message(chat_id=chat_id, text=message)
+            log_message(chat_id, 0, "Prisma", "assistant", f"[{checkin_type.upper()} CHECKIN] {message}")
+
+            logger.info(f"Sent {checkin_type} check-in to chat {chat_id}")
+
+        except Exception as e:
+            logger.error(f"Error sending check-in to {chat_id}: {e}")
 
 
 def main():
@@ -244,7 +296,25 @@ def main():
         first=60  # Start after 1 minute
     )
 
-    logger.info(f"{BOT_NAME} bot starting with proactive kicker...")
+    # Schedule daily check-ins
+    if PYTZ_AVAILABLE:
+        tz = pytz.timezone(TIMEZONE)
+        for checkin in DAILY_CHECKINS:
+            checkin_time = time(
+                hour=checkin["hour"],
+                minute=checkin["minute"],
+                tzinfo=tz
+            )
+            job_queue.run_daily(
+                daily_checkin,
+                time=checkin_time,
+                data={"type": checkin["type"]}
+            )
+            logger.info(f"Scheduled {checkin['type']} check-in at {checkin['hour']:02d}:{checkin['minute']:02d} {TIMEZONE}")
+    else:
+        logger.warning("pytz not available, daily check-ins disabled")
+
+    logger.info(f"{BOT_NAME} bot starting with proactive kicker and daily check-ins...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

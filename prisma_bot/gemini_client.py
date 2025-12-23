@@ -113,24 +113,55 @@ class PrismaGemini:
             logger.error(f"Gemini API error (kick): {e}")
             return self._get_fallback_kick(kick_type)
 
+    async def generate_checkin_message(self, chat_id: int, checkin_type: str, prompt: str) -> str:
+        """Generate daily check-in message"""
+        try:
+            context = self._build_context(chat_id)
+
+            full_prompt = f"""{SYSTEM_PROMPT}
+
+КОНТЕКСТ ПОСЛЕДНИХ СООБЩЕНИЙ:
+{context}
+
+ЗАДАЧА ({checkin_type.upper()} CHECK-IN):
+{prompt}
+
+твое сообщение:"""
+
+            response = self.model.generate_content(full_prompt)
+            return response.text.strip()
+
+        except Exception as e:
+            logger.error(f"Gemini API error (checkin): {e}")
+            return self._get_fallback_checkin(checkin_type)
+
+    def _get_fallback_checkin(self, checkin_type: str) -> str:
+        """Fallback check-in messages"""
+        if checkin_type == "morning":
+            return "◆ доброе утро, биороботы. новый день — новые возможности. что в планах?"
+        elif checkin_type == "afternoon":
+            return "▸ середина дня. как движется работа? кто-то застрял?"
+        else:
+            return "○ вечерний чекин. что успели сделать сегодня?"
+
     def _get_fallback_response(self) -> str:
         """Fallback when API fails"""
         import random
         fallbacks = [
-            "💎 мои кристаллы временно затуманились. момент...",
-            "⚡ что-то пошло не так в матрице. попробуй еще раз",
-            "✨ связь с космосом прервалась. скоро вернусь",
+            "◆ мои кристаллы временно затуманились. момент...",
+            "▸ что-то пошло не так в матрице. попробуй еще раз",
+            "● связь с космосом прервалась. скоро вернусь",
         ]
         return random.choice(fallbacks)
 
     def _get_fallback_kick(self, kick_type: str) -> str:
         """Fallback kick messages"""
         if kick_type == "gentle":
-            return "⚡ эй, биороботы! тишина в чате — это смерть проекта. что там с прогрессом?"
+            return "▸ эй, биороботы! тишина в чате — это смерть проекта. что там с прогрессом?"
         elif kick_type == "alarm":
-            return "🚨 ALARM! сутки тишины. проект официально в коме. нужны срочные действия или хороним?"
+            return "■ ALARM! сутки тишины. проект официально в коме. нужны срочные действия или хороним?"
         else:
-            return "💎 случайная мысль: а что если мы делаем все слишком сложно?"
+            return "◆ случайная мысль: а что если мы делаем все слишком сложно?"
 
 
 # Singleton
