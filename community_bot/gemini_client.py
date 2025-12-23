@@ -1,0 +1,82 @@
+import logging
+import google.generativeai as genai
+from config import GEMINI_API_KEY, SYSTEM_PROMPT
+
+logger = logging.getLogger(__name__)
+
+
+class GeminiClient:
+    def __init__(self):
+        if not GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY is required")
+
+        genai.configure(api_key=GEMINI_API_KEY)
+
+        # Use Gemini 1.5 Flash - fast and free tier friendly
+        self.model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=SYSTEM_PROMPT,
+            generation_config={
+                "temperature": 0.9,
+                "top_p": 0.95,
+                "top_k": 40,
+                "max_output_tokens": 256,
+            }
+        )
+
+        # Chat history for context (per chat)
+        self.chat_histories = {}
+
+    def get_chat(self, chat_id: int):
+        """Get or create chat session for a specific chat"""
+        if chat_id not in self.chat_histories:
+            self.chat_histories[chat_id] = self.model.start_chat(history=[])
+        return self.chat_histories[chat_id]
+
+    async def generate_response(self, chat_id: int, user_name: str, message: str) -> str:
+        """Generate a response to a user message"""
+        try:
+            chat = self.get_chat(chat_id)
+
+            # Format message with user context
+            prompt = f"[{user_name}]: {message}"
+
+            # Generate response
+            response = chat.send_message(prompt)
+
+            # Keep history manageable (last 20 messages)
+            if len(chat.history) > 40:  # 20 pairs of user/assistant messages
+                chat.history = chat.history[-40:]
+
+            return response.text.strip()
+
+        except Exception as e:
+            logger.error(f"Gemini API error: {e}")
+            return self._get_fallback_response()
+
+    def _get_fallback_response(self) -> str:
+        """Fallback responses when API fails"""
+        import random
+        fallbacks = [
+            "Мои нейроны временно в отпуске. Попробуй позже, биоробот",
+            "Упс, мицелий в моей голове запутался. Дай мне секунду",
+            "Сейчас не могу ответить, медитирую на грибницу",
+            "Технические шоколадки... в смысле, неполадки. Скоро вернусь",
+        ]
+        return random.choice(fallbacks)
+
+    def clear_history(self, chat_id: int):
+        """Clear chat history for a specific chat"""
+        if chat_id in self.chat_histories:
+            del self.chat_histories[chat_id]
+
+
+# Singleton instance
+_client = None
+
+
+def get_gemini_client() -> GeminiClient:
+    global _client
+    if _client is None:
+        _client = GeminiClient()
+    return _client
