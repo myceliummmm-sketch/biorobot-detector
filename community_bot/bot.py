@@ -191,6 +191,35 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Память очищена. Кто вы все такие?")
 
 
+async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Welcome new members to the chat"""
+    message = update.message
+    if not message or not message.new_chat_members:
+        return
+
+    chat_id = message.chat_id
+
+    for new_member in message.new_chat_members:
+        # Skip if bot joined
+        if new_member.is_bot:
+            continue
+
+        user_name = new_member.first_name or new_member.username or "биоробот"
+
+        logger.info(f"New member joined: {user_name}")
+
+        # Generate personalized welcome with Gemini
+        try:
+            gemini = get_gemini_client()
+            welcome_prompt = f"поприветствуй нового участника чата по имени {user_name}, коротко и дружелюбно"
+            response = await gemini.generate_response(chat_id, "система", welcome_prompt)
+            await message.reply_text(response)
+        except Exception as e:
+            logger.error(f"Error welcoming new member: {e}")
+            # Fallback welcome
+            await message.reply_text(f"о, {user_name} заходит! добро пожаловать в грибницу 🍄")
+
+
 def main():
     """Start the community bot"""
     if not COMMUNITY_BOT_TOKEN:
@@ -217,6 +246,12 @@ def main():
     app.add_handler(MessageHandler(
         filters.PHOTO,
         handle_photo
+    ))
+
+    # New member welcome handler
+    app.add_handler(MessageHandler(
+        filters.StatusUpdate.NEW_CHAT_MEMBERS,
+        welcome_new_member
     ))
 
     # Start polling
