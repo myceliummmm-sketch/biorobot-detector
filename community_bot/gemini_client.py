@@ -12,9 +12,9 @@ class GeminiClient:
 
         genai.configure(api_key=GEMINI_API_KEY)
 
-        # Use Gemini 1.5 Flash - fast and free tier friendly
+        # Use Gemini 2.0 Flash - latest, fast and free tier friendly
         self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.0-flash",
             system_instruction=SYSTEM_PROMPT,
             generation_config={
                 "temperature": 0.9,
