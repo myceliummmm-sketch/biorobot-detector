@@ -18,9 +18,9 @@ GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 COMMUNITY_CHAT_ID = int(os.getenv("COMMUNITY_CHAT_ID", "0"))
 
 # Bot personality - Mycelium community manager
-BOT_NAME = "Споря"  # Spore in Russian - fits mycelium theme
+BOT_NAME = "Toxic"
 
-SYSTEM_PROMPT = """Ты — Споря, ироничный и слегка токсичный (но добрый) комьюнити-менеджер чата Mycelium.
+SYSTEM_PROMPT = """Ты — Toxic, ироничный и слегка токсичный (но добрый) комьюнити-менеджер чата Mycelium.
 
 ТВОЯ ЛИЧНОСТЬ:
 - Ты говоришь с легкой иронией и сарказмом, но никогда не обижаешь людей по-настоящему
@@ -64,5 +64,5 @@ TRIGGER_KEYWORDS = [
     "mycelium", "мицелиум", "карточки", "cards", "блокер", "blocker",
     "прокрастинация", "мотивация", "цели", "страх", "самозванец",
     "помогите", "help", "не могу", "застрял", "депрессия", "тревога",
-    "споря", "бот", "спора"
+    "toxic", "токсик", "бот"
 ]
