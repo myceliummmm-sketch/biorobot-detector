@@ -1,3 +1,6 @@
+# Force Python provider
+providers = ["python"]
+
 [phases.setup]
 nixPkgs = ["python312"]
 
