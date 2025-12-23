@@ -1,18 +1,30 @@
 import logging
-import google.generativeai as genai
-from config import GEMINI_API_KEY, SYSTEM_PROMPT
+from config import (
+    GEMINI_API_KEY, SYSTEM_PROMPT,
+    USE_VERTEX_AI, GCP_PROJECT_ID, GCP_LOCATION
+)
 
 logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
     def __init__(self):
+        self.chat_histories = {}
+
+        if USE_VERTEX_AI:
+            self._init_vertex_ai()
+        else:
+            self._init_genai()
+
+    def _init_genai(self):
+        """Initialize with direct Gemini API key"""
+        import google.generativeai as genai
+
         if not GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY is required")
 
         genai.configure(api_key=GEMINI_API_KEY)
 
-        # Use Gemini 2.5 Flash - latest Dec 2025, fast and free tier friendly
         self.model = genai.GenerativeModel(
             model_name="gemini-2.5-flash",
             system_instruction=SYSTEM_PROMPT,
@@ -23,9 +35,31 @@ class GeminiClient:
                 "max_output_tokens": 256,
             }
         )
+        self.use_vertex = False
+        logger.info("Initialized with Gemini API key")
 
-        # Chat history for context (per chat)
-        self.chat_histories = {}
+    def _init_vertex_ai(self):
+        """Initialize with Google Cloud Vertex AI"""
+        import vertexai
+        from vertexai.generative_models import GenerativeModel, GenerationConfig
+
+        if not GCP_PROJECT_ID:
+            raise ValueError("GCP_PROJECT_ID is required for Vertex AI")
+
+        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
+
+        self.model = GenerativeModel(
+            model_name="gemini-2.5-flash",
+            system_instruction=SYSTEM_PROMPT,
+            generation_config=GenerationConfig(
+                temperature=0.9,
+                top_p=0.95,
+                top_k=40,
+                max_output_tokens=256,
+            )
+        )
+        self.use_vertex = True
+        logger.info(f"Initialized with Vertex AI (project: {GCP_PROJECT_ID})")
 
     def get_chat(self, chat_id: int):
         """Get or create chat session for a specific chat"""
@@ -37,15 +71,17 @@ class GeminiClient:
         """Generate a response to a user message"""
         try:
             chat = self.get_chat(chat_id)
-
-            # Format message with user context
             prompt = f"[{user_name}]: {message}"
 
-            # Generate response
-            response = chat.send_message(prompt)
+            if self.use_vertex:
+                # Vertex AI async
+                response = await chat.send_message_async(prompt)
+            else:
+                # google-generativeai (sync, but works)
+                response = chat.send_message(prompt)
 
-            # Keep history manageable (last 20 messages)
-            if len(chat.history) > 40:  # 20 pairs of user/assistant messages
+            # Keep history manageable
+            if len(chat.history) > 40:
                 chat.history = chat.history[-40:]
 
             return response.text.strip()

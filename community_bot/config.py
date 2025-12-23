@@ -6,8 +6,13 @@ load_dotenv()
 # Telegram Bot Token (get from @BotFather)
 COMMUNITY_BOT_TOKEN = os.getenv("COMMUNITY_BOT_TOKEN", "")
 
-# Google Gemini API Key (get from https://makersuite.google.com/app/apikey)
+# Google Gemini API Key (get from https://aistudio.google.com/apikey)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+# Google Cloud settings (alternative to API key)
+USE_VERTEX_AI = os.getenv("USE_VERTEX_AI", "false").lower() == "true"
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "")
+GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 
 # Chat ID where bot should be active (your community chat)
 COMMUNITY_CHAT_ID = int(os.getenv("COMMUNITY_CHAT_ID", "0"))
