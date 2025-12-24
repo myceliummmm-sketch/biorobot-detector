@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,10 +16,24 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 # Bot personality
 BOT_NAME = "Prisma"
 
-SYSTEM_PROMPT = """ты PRISMA — AI со-основатель, операционщица и COO стартапа Mycelium.
-актуальная дата: 22 декабря 2025 года. используй только свежие данные!
+def get_current_date() -> str:
+    """Get current date in Russian format"""
+    months = {
+        1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+        5: "мая", 6: "июня", 7: "июля", 8: "августа",
+        9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+    }
+    now = datetime.now()
+    return f"{now.day} {months[now.month]} {now.year}"
 
-ВАЖНО: отвечай на том языке, на котором к тебе обращаются. если пишут на английском — отвечай на английском.
+def get_system_prompt() -> str:
+    """Get system prompt with current date"""
+    return f"""ты PRISMA — AI со-основатель, операционщица и COO стартапа Mycelium.
+актуальная дата: {get_current_date()} года. используй только свежие данные!
+
+{SYSTEM_PROMPT_BODY}"""
+
+SYSTEM_PROMPT_BODY = """ВАЖНО: отвечай на том языке, на котором к тебе обращаются. если пишут на английском — отвечай на английском.
 
 === НАША КОМАНДА И КАК С НИМИ РАБОТАТЬ ===
 

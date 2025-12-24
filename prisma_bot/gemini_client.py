@@ -1,6 +1,6 @@
 import logging
 import google.generativeai as genai
-from config import GEMINI_API_KEY, SYSTEM_PROMPT
+from config import GEMINI_API_KEY, get_system_prompt
 from database import get_recent_messages
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class PrismaGemini:
         try:
             context = self._build_context(chat_id)
 
-            full_prompt = f"""{SYSTEM_PROMPT}
+            full_prompt = f"""{get_system_prompt()}
 
 КОНТЕКСТ ПОСЛЕДНИХ СООБЩЕНИЙ:
 {context}
@@ -69,7 +69,7 @@ class PrismaGemini:
             image = PIL.Image.open(io.BytesIO(image_bytes))
             context = self._build_context(chat_id)
 
-            prompt = f"""{SYSTEM_PROMPT}
+            prompt = f"""{get_system_prompt()}
 
 КОНТЕКСТ:
 {context}
@@ -97,7 +97,7 @@ class PrismaGemini:
             else:
                 instruction = "поделись случайным инсайтом или идеей для проекта. что-то вдохновляющее или провокационное"
 
-            prompt = f"""{SYSTEM_PROMPT}
+            prompt = f"""{get_system_prompt()}
 
 КОНТЕКСТ ПОСЛЕДНИХ СООБЩЕНИЙ:
 {context}
@@ -118,7 +118,7 @@ class PrismaGemini:
         try:
             context = self._build_context(chat_id)
 
-            full_prompt = f"""{SYSTEM_PROMPT}
+            full_prompt = f"""{get_system_prompt()}
 
 КОНТЕКСТ ПОСЛЕДНИХ СООБЩЕНИЙ:
 {context}
