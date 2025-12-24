@@ -161,3 +161,21 @@ def get_all_active_chats() -> list:
     except Exception as e:
         logger.error(f"Error getting active chats: {e}")
         return []
+
+
+def get_today_messages(chat_id: int) -> list:
+    """Get all messages from today for daily summary"""
+    try:
+        session = get_session()
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        messages = session.query(ChatLog).filter(
+            ChatLog.chat_id == chat_id,
+            ChatLog.timestamp >= today_start
+        ).order_by(ChatLog.timestamp.asc()).all()
+        session.close()
+
+        return messages
+    except Exception as e:
+        logger.error(f"Error getting today messages: {e}")
+        return []

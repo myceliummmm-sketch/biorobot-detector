@@ -137,12 +137,12 @@ class PrismaGemini:
 
     def _get_fallback_checkin(self, checkin_type: str) -> str:
         """Fallback check-in messages"""
-        if checkin_type == "morning":
-            return "○ доброе утро! что в планах?"
-        elif checkin_type == "afternoon":
-            return "▸ как движется? кто-то застрял?"
+        if checkin_type == "afternoon":
+            return "▸ как движется работа? кто-то застрял? могу помочь"
+        elif checkin_type == "daily_summary":
+            return "■ итог дня: тихий день сегодня. завтра продолжим!"
         else:
-            return "● что успели сегодня?"
+            return "● что нового?"
 
     def _get_fallback_response(self) -> str:
         """Fallback when API fails"""

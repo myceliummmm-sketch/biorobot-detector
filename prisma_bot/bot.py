@@ -23,7 +23,8 @@ from config import (
     TIMEZONE,
     DAILY_CHECKINS,
     CHECKIN_PROMPTS,
-    GOOGLE_DOCS_FOLDER_ID
+    GOOGLE_DOCS_FOLDER_ID,
+    ADMIN_USERNAME
 )
 from database import (
     init_db,
@@ -31,10 +32,12 @@ from database import (
     update_last_message_time,
     get_silence_duration,
     update_last_kick_time,
-    get_all_active_chats
+    get_all_active_chats,
+    get_today_messages
 )
 from gemini_client import get_prisma_client
 from google_docs_client import get_docs_client
+from github_client import get_github_client
 
 # Configure logging
 logging.basicConfig(
@@ -177,10 +180,50 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     status = "активен ✨" if silence < SILENCE_KICK_HOURS else "притих 💤" if silence < SILENCE_ALARM_HOURS else "тихо ⚡"
 
+    # Get GitHub status
+    github = get_github_client()
+    github_status = ""
+    if github.is_available():
+        commits = github.get_today_commits()
+        github_status = f"\n● GitHub: {len(commits)} коммитов сегодня"
+
     await update.message.reply_text(
         f"▸ статус: {status}\n"
-        f"○ тишина: {silence:.1f}ч"
+        f"○ тишина: {silence:.1f}ч{github_status}"
     )
+
+
+async def prompt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /prompt - only for admin"""
+    user = update.message.from_user
+    username = user.username or ""
+
+    # Check if user is admin
+    if username.lower() != ADMIN_USERNAME.lower():
+        await update.message.reply_text("○ эта команда только для Артема")
+        return
+
+    # Get the prompt text
+    if not context.args:
+        await update.message.reply_text(
+            "▸ использование:\n"
+            "/prompt добавить [текст] — добавить в промпт\n"
+            "/prompt показать — показать текущие дополнения"
+        )
+        return
+
+    action = context.args[0].lower()
+    text = " ".join(context.args[1:]) if len(context.args) > 1 else ""
+
+    if action == "показать":
+        # TODO: read from DB
+        await update.message.reply_text("○ дополнений к промпту пока нет")
+    elif action == "добавить" and text:
+        # TODO: save to DB
+        await update.message.reply_text(f"● добавлено в промпт:\n{text}")
+        logger.info(f"Admin {username} added to prompt: {text}")
+    else:
+        await update.message.reply_text("○ не понял команду. /prompt для справки")
 
 
 async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
@@ -218,7 +261,7 @@ async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
 
 async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
     """Send daily check-in message to all active chats"""
-    checkin_type = context.job.data.get("type", "morning")
+    checkin_type = context.job.data.get("type", "afternoon")
     logger.info(f"Running daily {checkin_type} check-in...")
 
     chats = get_all_active_chats()
@@ -227,6 +270,14 @@ async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
         logger.info("No active chats for check-in")
         return
 
+    # Get GitHub update
+    github_update = ""
+    github = get_github_client()
+    if github.is_available():
+        github_summary = github.get_summary()
+        if github_summary:
+            github_update = f"\n\nGITHUB_UPDATE:\n{github_summary}"
+
     # Get Google Docs update if available
     docs_update = ""
     if GOOGLE_DOCS_FOLDER_ID:
@@ -234,22 +285,22 @@ async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
         if docs_client.is_available():
             docs_update = docs_client.get_recent_updates(GOOGLE_DOCS_FOLDER_ID)
             if docs_update:
-                docs_update = f"\n\nобновления в документах:\n{docs_update}"
+                docs_update = f"\n\nDOCS_UPDATE:\n{docs_update}"
 
     for chat_id in chats:
         try:
             prisma = get_prisma_client()
 
             # Get checkin prompt
-            prompt = CHECKIN_PROMPTS.get(checkin_type, CHECKIN_PROMPTS["morning"])
+            prompt = CHECKIN_PROMPTS.get(checkin_type, CHECKIN_PROMPTS["afternoon"])
 
-            if docs_update and checkin_type == "morning":
-                prompt += docs_update
+            # Add updates to prompt
+            prompt += github_update + docs_update
 
             message = await prisma.generate_checkin_message(chat_id, checkin_type, prompt)
 
             await context.bot.send_message(chat_id=chat_id, text=message)
-            log_message(chat_id, 0, "Prisma", "assistant", f"[{checkin_type.upper()} CHECKIN] {message}")
+            log_message(chat_id, 0, "Prisma", "assistant", f"[{checkin_type.upper()}] {message}")
 
             logger.info(f"Sent {checkin_type} check-in to chat {chat_id}")
 
@@ -273,6 +324,7 @@ def main():
     # Add handlers
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("status", status_command))
+    app.add_handler(CommandHandler("prompt", prompt_command))
 
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
