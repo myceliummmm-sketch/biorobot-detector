@@ -227,4 +227,4 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "myceliummmm-sketch/mcards")
 
 # Admin settings (only this user can change prompt)
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "dischz")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "diischz")
