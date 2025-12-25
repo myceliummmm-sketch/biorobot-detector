@@ -145,27 +145,45 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file = await context.bot.get_file(voice.file_id)
         voice_path = f"/tmp/voice_{voice.file_id}.ogg"
         await file.download_to_drive(voice_path)
-        logger.info(f"Voice downloaded: {voice_path}")
+        logger.info(f"Voice downloaded: {voice_path}, duration: {voice.duration}s")
+
+        # Limit duration (5 min max to avoid long processing)
+        if voice.duration > 300:
+            await message.reply_text("○ аудио слишком длинное (макс 5 мин). разбей на части )")
+            if os_module.path.exists(voice_path):
+                os_module.unlink(voice_path)
+            return
 
         text = None
         error_msg = None
 
-        # Try Whisper first (better for long audio)
-        try:
-            import whisper
-            logger.info("Trying Whisper...")
-            model = whisper.load_model("base")
-            result = model.transcribe(voice_path, language="ru")
-            text = result["text"].strip()
-            logger.info(f"Whisper OK: {text[:50]}...")
-        except ImportError:
-            error_msg = "Whisper не установлен"
-            logger.warning(error_msg)
-        except Exception as e:
-            error_msg = f"Whisper: {str(e)[:50]}"
-            logger.warning(error_msg)
+        # Try OpenAI Whisper API first (fast!)
+        openai_key = os_module.environ.get("OPENAI_API_KEY")
+        if openai_key:
+            try:
+                import requests
+                logger.info("Trying OpenAI Whisper API...")
 
-        # Fallback to Google Speech
+                with open(voice_path, "rb") as audio_file:
+                    response = requests.post(
+                        "https://api.openai.com/v1/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {openai_key}"},
+                        files={"file": audio_file},
+                        data={"model": "whisper-1", "language": "ru"},
+                        timeout=60
+                    )
+
+                if response.ok:
+                    text = response.json().get("text", "").strip()
+                    logger.info(f"OpenAI Whisper OK: {text[:50]}...")
+                else:
+                    error_msg = f"OpenAI API: {response.status_code}"
+                    logger.warning(error_msg)
+            except Exception as e:
+                error_msg = f"OpenAI: {str(e)[:50]}"
+                logger.warning(error_msg)
+
+        # Fallback to Google Speech (for short audio only)
         if not text:
             try:
                 import subprocess
@@ -176,7 +194,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result = subprocess.run(
                     ["ffmpeg", "-y", "-i", voice_path, "-ar", "16000", "-ac", "1", wav_path],
                     capture_output=True,
-                    timeout=120
+                    timeout=30
                 )
 
                 if result.returncode != 0:
