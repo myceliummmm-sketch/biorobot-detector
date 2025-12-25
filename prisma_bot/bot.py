@@ -228,6 +228,15 @@ async def prompt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
     """Proactive check - kick silent chats"""
+
+    # Night mode: don't send messages between 23:00 and 9:00 (Spain time)
+    if PYTZ_AVAILABLE:
+        tz = pytz.timezone(TIMEZONE)
+        current_hour = datetime.now(tz).hour
+        if current_hour >= 23 or current_hour < 9:
+            logger.info("Night mode: skipping proactive check")
+            return
+
     logger.info("Running proactive check...")
 
     chats = get_all_active_chats()
