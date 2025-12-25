@@ -568,6 +568,53 @@ async def upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"○ ошибка: {str(e)[:100]}")
 
 
+async def github_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /github - show GitHub repo stats"""
+    gh = get_github_client()
+
+    if not gh.is_available():
+        await update.message.reply_text("○ GitHub не подключен. нужен GITHUB_TOKEN")
+        return
+
+    try:
+        lines = [f"📊 GitHub: {gh.repo}", ""]
+
+        # Recent commits
+        commits = gh.get_today_commits()
+        if commits:
+            lines.append(f"▸ коммиты за сутки ({len(commits)}):")
+            for c in commits[:5]:
+                lines.append(f"  • {c['sha']} — {c['author']}: {c['message']}")
+        else:
+            lines.append("▸ коммитов за сутки нет")
+
+        # Open PRs
+        prs = gh.get_open_prs()
+        if prs:
+            lines.append(f"\n■ открытые PR ({len(prs)}):")
+            for pr in prs[:5]:
+                lines.append(f"  • #{pr['number']}: {pr['title']}")
+        else:
+            lines.append("\n■ открытых PR нет")
+
+        # Merged PRs this week
+        merged = gh.get_merged_prs(days=7)
+        if merged:
+            lines.append(f"\n● смержено за неделю ({len(merged)}):")
+            for pr in merged[:5]:
+                lines.append(f"  • #{pr['number']}: {pr['title']} ({pr['merged_at']})")
+
+        # Issues
+        issues = gh.get_recent_issues()
+        lines.append(f"\n○ issues: {issues['open']} открыто, {issues['closed_today']} закрыто сегодня")
+
+        await update.message.reply_text("\n".join(lines))
+
+    except Exception as e:
+        logger.error(f"GitHub command error: {e}")
+        await update.message.reply_text(f"○ ошибка: {str(e)[:100]}")
+
+
 async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
     """Proactive check - kick silent chats"""
 
@@ -687,6 +734,7 @@ def main():
     app.add_handler(CommandHandler("memory", memory_command))
     app.add_handler(CommandHandler("youtube", youtube_command))
     app.add_handler(CommandHandler("upload", upload_command))
+    app.add_handler(CommandHandler("github", github_command))
 
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,

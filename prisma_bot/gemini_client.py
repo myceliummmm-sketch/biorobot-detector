@@ -13,6 +13,13 @@ YOUTUBE_KEYWORDS = [
     "ролик", "views", "subscribers", "аналитика", "статистика канала"
 ]
 
+# GitHub-related keywords
+GITHUB_KEYWORDS = [
+    "github", "гитхаб", "гит", "git", "коммит", "commit", "пулл реквест",
+    "pull request", "pr", "мерж", "merge", "репо", "репозиторий", "код",
+    "issue", "ишью", "бранч", "branch", "ветка", "деплой", "deploy"
+]
+
 
 class PrismaGemini:
     def __init__(self):
@@ -82,18 +89,33 @@ class PrismaGemini:
                 logger.debug(f"YouTube context error: {e}")
         return ""
 
+    def _check_github_context(self, message: str) -> str:
+        """Check if message is about GitHub and return repo context if needed"""
+        message_lower = message.lower()
+        if any(kw in message_lower for kw in GITHUB_KEYWORDS):
+            try:
+                from github_client import get_github_client
+                gh = get_github_client()
+                if gh.is_available():
+                    summary = gh.get_full_summary()
+                    return f"\n\n=== ДАННЫЕ GITHUB (используй для ответа) ===\n{summary}"
+            except Exception as e:
+                logger.debug(f"GitHub context error: {e}")
+        return ""
+
     async def generate_response(self, chat_id: int, user_name: str, message: str) -> str:
         """Generate response with context from DB"""
         try:
             context = self._build_context(chat_id)
 
-            # Add YouTube context if message is about YouTube
+            # Add smart context if message is about specific topics
             youtube_context = self._check_youtube_context(message)
+            github_context = self._check_github_context(message)
 
             full_prompt = f"""{get_system_prompt()}
 
 КОНТЕКСТ ПОСЛЕДНИХ СООБЩЕНИЙ:
-{context}{youtube_context}
+{context}{youtube_context}{github_context}
 
 НОВОЕ СООБЩЕНИЕ:
 [{user_name}]: {message}
