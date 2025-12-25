@@ -1,10 +1,17 @@
 import logging
 import json
+import re
 import google.generativeai as genai
 from config import GEMINI_API_KEY, get_system_prompt
 from database import get_recent_messages, get_memory_context, add_memory
 
 logger = logging.getLogger(__name__)
+
+# YouTube-related keywords
+YOUTUBE_KEYWORDS = [
+    "youtube", "ютуб", "ютюб", "канал", "видео", "просмотр", "подписчик",
+    "ролик", "views", "subscribers", "аналитика", "статистика канала"
+]
 
 
 class PrismaGemini:
@@ -47,15 +54,46 @@ class PrismaGemini:
             return f"{memory_context}\n\n=== ПОСЛЕДНИЕ СООБЩЕНИЯ ===\n{message_context}"
         return message_context
 
+    def _check_youtube_context(self, message: str) -> str:
+        """Check if message is about YouTube and return stats context if needed"""
+        message_lower = message.lower()
+        if any(kw in message_lower for kw in YOUTUBE_KEYWORDS):
+            try:
+                from youtube_client import get_youtube_client
+                yt = get_youtube_client()
+                if yt.is_available():
+                    stats = yt.get_channel_stats()
+                    analytics = yt.get_analytics_last_days(7)
+                    videos = yt.get_recent_videos(3)
+
+                    lines = ["\n=== ДАННЫЕ YOUTUBE (используй для ответа) ==="]
+                    if stats:
+                        lines.append(f"Канал: {stats['title']}")
+                        lines.append(f"Подписчиков: {stats['subscribers']:,}")
+                        lines.append(f"Всего просмотров: {stats['total_views']:,}")
+                    if analytics:
+                        lines.append(f"За 7 дней: {analytics['views']:,} просмотров, {analytics['subs_net']:+d} подписчиков")
+                    if videos:
+                        lines.append("Последние видео:")
+                        for v in videos:
+                            lines.append(f"  - {v['title']}: {v['views']:,} просмотров")
+                    return "\n".join(lines)
+            except Exception as e:
+                logger.debug(f"YouTube context error: {e}")
+        return ""
+
     async def generate_response(self, chat_id: int, user_name: str, message: str) -> str:
         """Generate response with context from DB"""
         try:
             context = self._build_context(chat_id)
 
+            # Add YouTube context if message is about YouTube
+            youtube_context = self._check_youtube_context(message)
+
             full_prompt = f"""{get_system_prompt()}
 
 КОНТЕКСТ ПОСЛЕДНИХ СООБЩЕНИЙ:
-{context}
+{context}{youtube_context}
 
 НОВОЕ СООБЩЕНИЕ:
 [{user_name}]: {message}

@@ -114,6 +114,96 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error: {e}")
 
 
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle voice messages - transcribe and respond"""
+    message = update.message
+    if not message or not message.voice:
+        return
+
+    chat_id = message.chat_id
+    user = message.from_user
+
+    if user.is_bot:
+        return
+
+    user_name = user.first_name or user.username or "аноним"
+
+    logger.info(f"Voice message from {user_name}")
+
+    try:
+        # Download voice file
+        voice = message.voice
+        file = await context.bot.get_file(voice.file_id)
+        voice_path = f"/tmp/voice_{voice.file_id}.ogg"
+        await file.download_to_drive(voice_path)
+
+        # Convert OGG to WAV for speech recognition
+        import subprocess
+        wav_path = f"/tmp/voice_{voice.file_id}.wav"
+
+        # Use ffmpeg to convert (should be available on most systems)
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", voice_path, "-ar", "16000", "-ac", "1", wav_path],
+            capture_output=True
+        )
+
+        if result.returncode != 0:
+            logger.error(f"ffmpeg error: {result.stderr}")
+            await message.reply_text("○ не смогла расшифровать голосовое")
+            return
+
+        # Use speech recognition
+        try:
+            import speech_recognition as sr
+            recognizer = sr.Recognizer()
+
+            with sr.AudioFile(wav_path) as source:
+                audio = recognizer.record(source)
+
+            # Use Google's free speech recognition
+            text = recognizer.recognize_google(audio, language="ru-RU")
+            logger.info(f"Transcribed: {text}")
+
+        except ImportError:
+            logger.error("speech_recognition not installed")
+            await message.reply_text("○ распознавание речи не настроено. установи: pip install SpeechRecognition")
+            return
+        except sr.UnknownValueError:
+            await message.reply_text("○ не разобрала что ты сказал, попробуй еще раз")
+            return
+        except sr.RequestError as e:
+            logger.error(f"Speech recognition error: {e}")
+            await message.reply_text("○ ошибка распознавания, попробуй позже")
+            return
+
+        # Clean up temp files
+        import os as os_module
+        for f in [voice_path, wav_path]:
+            if os_module.path.exists(f):
+                os_module.unlink(f)
+
+        # Log and respond to transcribed text
+        log_message(chat_id, user.id, user_name, "user", f"[голосовое] {text}")
+        update_last_message_time(chat_id)
+
+        # Show typing
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+        prisma = get_prisma_client()
+        response = await prisma.generate_response(chat_id, user_name, text)
+
+        # Log bot response
+        log_message(chat_id, 0, "Prisma", "assistant", response)
+
+        # Reply with transcription + response
+        await message.reply_text(f"🎤 \"{text}\"\n\n{response}")
+        logger.info(f"Voice response: {response[:50]}...")
+
+    except Exception as e:
+        logger.error(f"Voice handling error: {e}")
+        await message.reply_text("○ ошибка обработки голосового")
+
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle photos"""
     message = update.message
@@ -295,7 +385,15 @@ async def memory_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /youtube - show YouTube channel stats"""
+    """Handle /youtube - show YouTube channel stats (admin only)"""
+    user = update.message.from_user
+    username = user.username or ""
+
+    # Only admin can see detailed stats
+    if username.lower() != ADMIN_USERNAME.lower():
+        await update.message.reply_text("○ детальная статистика YouTube только для Артема. но можешь спросить меня про канал — отвечу )")
+        return
+
     yt = get_youtube_client()
 
     if not yt.is_available():
@@ -576,6 +674,11 @@ def main():
     app.add_handler(MessageHandler(
         filters.PHOTO,
         handle_photo
+    ))
+
+    app.add_handler(MessageHandler(
+        filters.VOICE,
+        handle_voice
     ))
 
     # Add proactive job
