@@ -33,7 +33,10 @@ from database import (
     get_silence_duration,
     update_last_kick_time,
     get_all_active_chats,
-    get_today_messages
+    get_today_messages,
+    get_all_memories,
+    add_memory,
+    delete_memory
 )
 from gemini_client import get_prisma_client
 from google_docs_client import get_docs_client
@@ -226,6 +229,70 @@ async def prompt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("○ не понял команду. /prompt для справки")
 
 
+async def memory_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /memory - view and manage permanent memory"""
+    user = update.message.from_user
+    username = user.username or ""
+    chat_id = update.message.chat_id
+
+    # Check if user is admin
+    if username.lower() != ADMIN_USERNAME.lower():
+        await update.message.reply_text("○ эта команда только для Артема")
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "▸ постоянная память prisma\n\n"
+            "/memory показать — все записи\n"
+            "/memory добавить [категория] [текст]\n"
+            "/memory удалить [id]\n\n"
+            "категории: decision, task, insight, fact, blocker, progress"
+        )
+        return
+
+    action = context.args[0].lower()
+
+    if action == "показать":
+        memories = get_all_memories(chat_id)
+        if not memories:
+            await update.message.reply_text("○ память пуста")
+            return
+
+        lines = ["■ постоянная память:\n"]
+        for m in memories[:20]:  # Limit to 20
+            lines.append(f"#{m.id} [{m.category}] {m.content[:100]}")
+            lines.append(f"   добавил: {m.added_by}\n")
+
+        await update.message.reply_text("\n".join(lines))
+
+    elif action == "добавить" and len(context.args) >= 3:
+        category = context.args[1].lower()
+        content = " ".join(context.args[2:])
+
+        valid_categories = ["decision", "task", "insight", "fact", "blocker", "progress"]
+        if category not in valid_categories:
+            await update.message.reply_text(f"○ неизвестная категория. доступные: {', '.join(valid_categories)}")
+            return
+
+        if add_memory(chat_id, category, content, username):
+            await update.message.reply_text(f"● добавлено в память [{category}]:\n{content}")
+        else:
+            await update.message.reply_text("○ ошибка сохранения")
+
+    elif action == "удалить" and len(context.args) >= 2:
+        try:
+            memory_id = int(context.args[1])
+            if delete_memory(memory_id):
+                await update.message.reply_text(f"● запись #{memory_id} удалена")
+            else:
+                await update.message.reply_text("○ ошибка удаления")
+        except ValueError:
+            await update.message.reply_text("○ укажи ID записи числом")
+
+    else:
+        await update.message.reply_text("○ не понял команду. /memory для справки")
+
+
 async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
     """Proactive check - kick silent chats"""
 
@@ -334,6 +401,7 @@ def main():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("prompt", prompt_command))
+    app.add_handler(CommandHandler("memory", memory_command))
 
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
