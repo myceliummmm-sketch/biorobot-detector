@@ -131,8 +131,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"Voice message from {user_name}, duration: {duration}s")
 
+    import os as os_module
+
     # Warn if very long
-    if duration > 300:  # 5 minutes
+    if duration > 300:
         await message.reply_text("● длинное голосовое, расшифровываю... подожди минутку")
     elif duration > 60:
         await message.reply_text("● расшифровываю голосовое...")
@@ -143,75 +145,85 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file = await context.bot.get_file(voice.file_id)
         voice_path = f"/tmp/voice_{voice.file_id}.ogg"
         await file.download_to_drive(voice_path)
+        logger.info(f"Voice downloaded: {voice_path}")
 
         text = None
+        error_msg = None
 
         # Try Whisper first (better for long audio)
         try:
             import whisper
-            model = whisper.load_model("base")  # or "small" for better quality
+            logger.info("Trying Whisper...")
+            model = whisper.load_model("base")
             result = model.transcribe(voice_path, language="ru")
             text = result["text"].strip()
-            logger.info(f"Whisper transcribed: {text[:100]}...")
+            logger.info(f"Whisper OK: {text[:50]}...")
         except ImportError:
-            logger.warning("Whisper not available, falling back to Google Speech")
+            error_msg = "Whisper не установлен"
+            logger.warning(error_msg)
         except Exception as e:
-            logger.warning(f"Whisper error: {e}, falling back to Google Speech")
+            error_msg = f"Whisper: {str(e)[:50]}"
+            logger.warning(error_msg)
 
-        # Fallback to Google Speech for short audio
-        if not text and duration <= 60:
+        # Fallback to Google Speech
+        if not text:
             try:
                 import subprocess
                 import speech_recognition as sr
+                logger.info("Trying Google Speech...")
 
                 wav_path = f"/tmp/voice_{voice.file_id}.wav"
-                subprocess.run(
+                result = subprocess.run(
                     ["ffmpeg", "-y", "-i", voice_path, "-ar", "16000", "-ac", "1", wav_path],
-                    capture_output=True
+                    capture_output=True,
+                    timeout=120
                 )
 
-                recognizer = sr.Recognizer()
-                with sr.AudioFile(wav_path) as source:
-                    audio = recognizer.record(source)
-                text = recognizer.recognize_google(audio, language="ru-RU")
+                if result.returncode != 0:
+                    error_msg = "ffmpeg не работает"
+                    logger.error(f"ffmpeg error: {result.stderr.decode()[:100]}")
+                else:
+                    recognizer = sr.Recognizer()
+                    with sr.AudioFile(wav_path) as source:
+                        audio = recognizer.record(source)
+                    text = recognizer.recognize_google(audio, language="ru-RU")
+                    logger.info(f"Google Speech OK: {text[:50]}...")
 
-                import os as os_module
                 if os_module.path.exists(wav_path):
                     os_module.unlink(wav_path)
 
+            except ImportError:
+                error_msg = "SpeechRecognition не установлен"
+                logger.error(error_msg)
             except Exception as e:
-                logger.error(f"Google Speech error: {e}")
+                error_msg = f"Speech: {str(e)[:50]}"
+                logger.error(error_msg)
 
         # Clean up
-        import os as os_module
         if os_module.path.exists(voice_path):
             os_module.unlink(voice_path)
 
         if not text:
-            await message.reply_text("○ не смогла расшифровать голосовое")
+            await message.reply_text(f"○ не смогла расшифровать: {error_msg or 'неизвестная ошибка'}")
             return
 
-        # Log and respond to transcribed text
+        # Log and respond
         log_message(chat_id, user.id, user_name, "user", f"[голосовое] {text}")
         update_last_message_time(chat_id)
 
-        # Show typing
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
         prisma = get_prisma_client()
         response = await prisma.generate_response(chat_id, user_name, text)
 
-        # Log bot response
         log_message(chat_id, 0, "Prisma", "assistant", response)
 
-        # Reply with transcription + response (truncate if too long)
         transcription_preview = text[:500] + "..." if len(text) > 500 else text
         await message.reply_text(f"🎤 \"{transcription_preview}\"\n\n{response}")
-        logger.info(f"Voice response: {response[:50]}...")
 
     except Exception as e:
-        logger.error(f"Voice handling error: {e}")
-        await message.reply_text("○ ошибка обработки голосового")
+        logger.error(f"Voice error: {e}")
+        await message.reply_text(f"○ ошибка: {str(e)[:100]}")
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
