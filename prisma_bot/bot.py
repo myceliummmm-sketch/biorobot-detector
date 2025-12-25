@@ -115,7 +115,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle voice messages - transcribe and respond"""
+    """Handle voice messages - transcribe with Whisper and respond"""
     message = update.message
     if not message or not message.voice:
         return
@@ -127,8 +127,15 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_name = user.first_name or user.username or "аноним"
+    duration = message.voice.duration or 0
 
-    logger.info(f"Voice message from {user_name}")
+    logger.info(f"Voice message from {user_name}, duration: {duration}s")
+
+    # Warn if very long
+    if duration > 300:  # 5 minutes
+        await message.reply_text("● длинное голосовое, расшифровываю... подожди минутку")
+    elif duration > 60:
+        await message.reply_text("● расшифровываю голосовое...")
 
     try:
         # Download voice file
@@ -137,50 +144,52 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         voice_path = f"/tmp/voice_{voice.file_id}.ogg"
         await file.download_to_drive(voice_path)
 
-        # Convert OGG to WAV for speech recognition
-        import subprocess
-        wav_path = f"/tmp/voice_{voice.file_id}.wav"
+        text = None
 
-        # Use ffmpeg to convert (should be available on most systems)
-        result = subprocess.run(
-            ["ffmpeg", "-y", "-i", voice_path, "-ar", "16000", "-ac", "1", wav_path],
-            capture_output=True
-        )
+        # Try Whisper first (better for long audio)
+        try:
+            import whisper
+            model = whisper.load_model("base")  # or "small" for better quality
+            result = model.transcribe(voice_path, language="ru")
+            text = result["text"].strip()
+            logger.info(f"Whisper transcribed: {text[:100]}...")
+        except ImportError:
+            logger.warning("Whisper not available, falling back to Google Speech")
+        except Exception as e:
+            logger.warning(f"Whisper error: {e}, falling back to Google Speech")
 
-        if result.returncode != 0:
-            logger.error(f"ffmpeg error: {result.stderr}")
+        # Fallback to Google Speech for short audio
+        if not text and duration <= 60:
+            try:
+                import subprocess
+                import speech_recognition as sr
+
+                wav_path = f"/tmp/voice_{voice.file_id}.wav"
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", voice_path, "-ar", "16000", "-ac", "1", wav_path],
+                    capture_output=True
+                )
+
+                recognizer = sr.Recognizer()
+                with sr.AudioFile(wav_path) as source:
+                    audio = recognizer.record(source)
+                text = recognizer.recognize_google(audio, language="ru-RU")
+
+                import os as os_module
+                if os_module.path.exists(wav_path):
+                    os_module.unlink(wav_path)
+
+            except Exception as e:
+                logger.error(f"Google Speech error: {e}")
+
+        # Clean up
+        import os as os_module
+        if os_module.path.exists(voice_path):
+            os_module.unlink(voice_path)
+
+        if not text:
             await message.reply_text("○ не смогла расшифровать голосовое")
             return
-
-        # Use speech recognition
-        try:
-            import speech_recognition as sr
-            recognizer = sr.Recognizer()
-
-            with sr.AudioFile(wav_path) as source:
-                audio = recognizer.record(source)
-
-            # Use Google's free speech recognition
-            text = recognizer.recognize_google(audio, language="ru-RU")
-            logger.info(f"Transcribed: {text}")
-
-        except ImportError:
-            logger.error("speech_recognition not installed")
-            await message.reply_text("○ распознавание речи не настроено. установи: pip install SpeechRecognition")
-            return
-        except sr.UnknownValueError:
-            await message.reply_text("○ не разобрала что ты сказал, попробуй еще раз")
-            return
-        except sr.RequestError as e:
-            logger.error(f"Speech recognition error: {e}")
-            await message.reply_text("○ ошибка распознавания, попробуй позже")
-            return
-
-        # Clean up temp files
-        import os as os_module
-        for f in [voice_path, wav_path]:
-            if os_module.path.exists(f):
-                os_module.unlink(f)
 
         # Log and respond to transcribed text
         log_message(chat_id, user.id, user_name, "user", f"[голосовое] {text}")
@@ -195,8 +204,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Log bot response
         log_message(chat_id, 0, "Prisma", "assistant", response)
 
-        # Reply with transcription + response
-        await message.reply_text(f"🎤 \"{text}\"\n\n{response}")
+        # Reply with transcription + response (truncate if too long)
+        transcription_preview = text[:500] + "..." if len(text) > 500 else text
+        await message.reply_text(f"🎤 \"{transcription_preview}\"\n\n{response}")
         logger.info(f"Voice response: {response[:50]}...")
 
     except Exception as e:
