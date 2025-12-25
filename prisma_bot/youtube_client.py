@@ -10,6 +10,7 @@ try:
     from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
     YOUTUBE_AVAILABLE = True
 except ImportError:
     YOUTUBE_AVAILABLE = False
@@ -50,6 +51,7 @@ class YouTubeClient:
             client_secret=self.client_secret,
             scopes=[
                 "https://www.googleapis.com/auth/youtube.readonly",
+                "https://www.googleapis.com/auth/youtube.upload",
                 "https://www.googleapis.com/auth/yt-analytics.readonly"
             ]
         )
@@ -223,6 +225,128 @@ class YouTubeClient:
             lines.append(f"   последнее видео: {v['views']:,} просмотров")
 
         return "\n".join(lines) if lines else ""
+
+    def upload_video(
+        self,
+        file_path: str,
+        title: str,
+        description: str,
+        tags: List[str] = None,
+        category_id: str = "22",  # 22 = People & Blogs
+        privacy: str = "private"  # private, unlisted, public
+    ) -> Optional[Dict]:
+        """
+        Upload a video to YouTube.
+
+        Args:
+            file_path: Path to video file
+            title: Video title
+            description: Video description
+            tags: List of tags
+            category_id: YouTube category (22=People&Blogs, 28=Science&Tech)
+            privacy: private, unlisted, or public
+
+        Returns:
+            Dict with video_id and url, or None on error
+        """
+        if not self.is_available():
+            logger.error("YouTube client not available for upload")
+            return None
+
+        try:
+            body = {
+                "snippet": {
+                    "title": title[:100],  # Max 100 chars
+                    "description": description[:5000],  # Max 5000 chars
+                    "tags": tags[:500] if tags else [],  # Max 500 tags
+                    "categoryId": category_id
+                },
+                "status": {
+                    "privacyStatus": privacy,
+                    "selfDeclaredMadeForKids": False
+                }
+            }
+
+            # Create media upload
+            media = MediaFileUpload(
+                file_path,
+                mimetype="video/*",
+                resumable=True,
+                chunksize=1024 * 1024  # 1MB chunks
+            )
+
+            # Execute upload
+            request = self.youtube.videos().insert(
+                part="snippet,status",
+                body=body,
+                media_body=media
+            )
+
+            response = None
+            while response is None:
+                status, response = request.next_chunk()
+                if status:
+                    logger.info(f"Upload progress: {int(status.progress() * 100)}%")
+
+            video_id = response["id"]
+            logger.info(f"Video uploaded: {video_id}")
+
+            return {
+                "video_id": video_id,
+                "url": f"https://youtube.com/watch?v={video_id}",
+                "title": title
+            }
+
+        except Exception as e:
+            logger.error(f"Error uploading video: {e}")
+            return None
+
+    def update_video(
+        self,
+        video_id: str,
+        title: str = None,
+        description: str = None,
+        tags: List[str] = None
+    ) -> bool:
+        """Update video title/description/tags"""
+        if not self.is_available():
+            return False
+
+        try:
+            # Get current video info
+            response = self.youtube.videos().list(
+                part="snippet",
+                id=video_id
+            ).execute()
+
+            if not response.get("items"):
+                return False
+
+            snippet = response["items"][0]["snippet"]
+
+            # Update fields
+            if title:
+                snippet["title"] = title[:100]
+            if description:
+                snippet["description"] = description[:5000]
+            if tags:
+                snippet["tags"] = tags[:500]
+
+            # Update video
+            self.youtube.videos().update(
+                part="snippet",
+                body={
+                    "id": video_id,
+                    "snippet": snippet
+                }
+            ).execute()
+
+            logger.info(f"Video updated: {video_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating video: {e}")
+            return False
 
 
 # Singleton

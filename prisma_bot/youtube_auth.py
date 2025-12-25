@@ -16,9 +16,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 CLIENT_ID = os.getenv("YOUTUBE_CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET", "")
 
-# Scopes needed
+# Scopes needed (includes upload!)
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/yt-analytics.readonly"
 ]
 

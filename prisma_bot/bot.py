@@ -337,6 +337,117 @@ async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines))
 
 
+async def upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /upload - upload video to YouTube with AI-generated description"""
+    user = update.message.from_user
+    username = user.username or ""
+    chat_id = update.message.chat_id
+
+    # Check if user is admin
+    if username.lower() != ADMIN_USERNAME.lower():
+        await update.message.reply_text("○ загрузка только для Артема")
+        return
+
+    yt = get_youtube_client()
+    if not yt.is_available():
+        await update.message.reply_text("○ YouTube не подключен")
+        return
+
+    # Get title from command args
+    if not context.args:
+        await update.message.reply_text(
+            "▸ как использовать:\n\n"
+            "1. отправь видео в чат\n"
+            "2. ответь на него командой:\n"
+            "   /upload Название видео\n\n"
+            "Prisma сгенерит описание и загрузит на YouTube )"
+        )
+        return
+
+    title = " ".join(context.args)
+
+    # Check if replying to a video
+    reply = update.message.reply_to_message
+    if not reply or not reply.video:
+        await update.message.reply_text("○ ответь этой командой на видео")
+        return
+
+    video = reply.video
+
+    # Check file size (Telegram limit ~20MB for bots)
+    if video.file_size > 50 * 1024 * 1024:  # 50MB
+        await update.message.reply_text("○ видео слишком большое (макс 50MB)")
+        return
+
+    await update.message.reply_text("● скачиваю видео...")
+
+    try:
+        # Download video
+        file = await context.bot.get_file(video.file_id)
+        file_path = f"/tmp/yt_upload_{video.file_id}.mp4"
+        await file.download_to_drive(file_path)
+
+        await update.message.reply_text("● генерю описание...")
+
+        # Generate description with Gemini
+        prisma = get_prisma_client()
+        desc_prompt = f"""Сгенерируй описание для YouTube видео.
+
+Название: {title}
+Канал: Mycelium Media
+Тематика: стартапы, микро-бизнесы, предпринимательство
+
+Описание должно быть:
+- 3-5 абзацев
+- с эмодзи
+- с призывом подписаться
+- с хэштегами в конце
+
+Формат:
+[описание видео]
+
+🔔 Подписывайтесь на канал!
+💬 Пишите в комментариях...
+
+#mycelium #стартап #бизнес"""
+
+        description = await prisma.model.generate_content_async(desc_prompt)
+        description_text = description.text.strip()
+
+        # Generate tags
+        tags = ["mycelium", "стартап", "бизнес", "предпринимательство"]
+
+        await update.message.reply_text("● загружаю на YouTube...")
+
+        # Upload to YouTube (as unlisted first for safety)
+        result = yt.upload_video(
+            file_path=file_path,
+            title=title,
+            description=description_text,
+            tags=tags,
+            privacy="unlisted"  # unlisted for safety, can change later
+        )
+
+        # Clean up temp file
+        import os as os_module
+        if os_module.path.exists(file_path):
+            os_module.unlink(file_path)
+
+        if result:
+            await update.message.reply_text(
+                f"✨ видео загружено!\n\n"
+                f"▸ {result['url']}\n\n"
+                f"статус: unlisted (можно поменять в YouTube Studio)\n\n"
+                f"■ описание:\n{description_text[:500]}..."
+            )
+        else:
+            await update.message.reply_text("○ ошибка загрузки")
+
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        await update.message.reply_text(f"○ ошибка: {str(e)[:100]}")
+
+
 async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
     """Proactive check - kick silent chats"""
 
@@ -455,6 +566,7 @@ def main():
     app.add_handler(CommandHandler("prompt", prompt_command))
     app.add_handler(CommandHandler("memory", memory_command))
     app.add_handler(CommandHandler("youtube", youtube_command))
+    app.add_handler(CommandHandler("upload", upload_command))
 
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
