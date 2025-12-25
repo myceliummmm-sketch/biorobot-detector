@@ -41,6 +41,7 @@ from database import (
 from gemini_client import get_prisma_client
 from google_docs_client import get_docs_client
 from github_client import get_github_client
+from youtube_client import get_youtube_client
 
 # Configure logging
 logging.basicConfig(
@@ -293,6 +294,49 @@ async def memory_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("○ не понял команду. /memory для справки")
 
 
+async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /youtube - show YouTube channel stats"""
+    yt = get_youtube_client()
+
+    if not yt.is_available():
+        await update.message.reply_text("○ YouTube не подключен. нужен YOUTUBE_REFRESH_TOKEN")
+        return
+
+    # Get channel stats
+    stats = yt.get_channel_stats()
+    if not stats:
+        await update.message.reply_text("○ не удалось получить статистику")
+        return
+
+    lines = [f"📺 {stats['title']}", ""]
+    lines.append(f"▸ подписчиков: {stats['subscribers']:,}")
+    lines.append(f"▸ всего просмотров: {stats['total_views']:,}")
+    lines.append(f"▸ видео: {stats['video_count']}")
+
+    # Weekly analytics
+    analytics = yt.get_analytics_last_days(7)
+    if analytics:
+        lines.append("")
+        lines.append("■ за последние 7 дней:")
+        lines.append(f"  просмотров: {analytics['views']:,}")
+        lines.append(f"  часов просмотра: {analytics['watch_hours']}")
+        if analytics['subs_net'] >= 0:
+            lines.append(f"  подписчиков: +{analytics['subs_net']}")
+        else:
+            lines.append(f"  подписчиков: {analytics['subs_net']}")
+
+    # Recent videos
+    videos = yt.get_recent_videos(3)
+    if videos:
+        lines.append("")
+        lines.append("● последние видео:")
+        for v in videos:
+            lines.append(f"  {v['title']}")
+            lines.append(f"    {v['views']:,} 👁  {v['likes']} ❤️")
+
+    await update.message.reply_text("\n".join(lines))
+
+
 async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
     """Proactive check - kick silent chats"""
 
@@ -363,6 +407,14 @@ async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
             if docs_update:
                 docs_update = f"\n\nDOCS_UPDATE:\n{docs_update}"
 
+    # Get YouTube update
+    youtube_update = ""
+    yt = get_youtube_client()
+    if yt.is_available():
+        yt_summary = yt.get_summary()
+        if yt_summary:
+            youtube_update = f"\n\nYOUTUBE_UPDATE:\n{yt_summary}"
+
     for chat_id in chats:
         try:
             prisma = get_prisma_client()
@@ -371,7 +423,7 @@ async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
             prompt = CHECKIN_PROMPTS.get(checkin_type, CHECKIN_PROMPTS["afternoon"])
 
             # Add updates to prompt
-            prompt += github_update + docs_update
+            prompt += github_update + docs_update + youtube_update
 
             message = await prisma.generate_checkin_message(chat_id, checkin_type, prompt)
 
@@ -402,6 +454,7 @@ def main():
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("prompt", prompt_command))
     app.add_handler(CommandHandler("memory", memory_command))
+    app.add_handler(CommandHandler("youtube", youtube_command))
 
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
