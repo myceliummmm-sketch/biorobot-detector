@@ -1,8 +1,13 @@
 import os
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from current dir or parent dir
+env_path = Path(__file__).parent / ".env"
+if not env_path.exists():
+    env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(env_path)
 
 # Telegram Bot Token
 PRISMA_BOT_TOKEN = os.getenv("PRISMA_BOT_TOKEN", "")
