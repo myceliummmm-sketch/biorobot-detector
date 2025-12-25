@@ -26,7 +26,7 @@ class PrismaGemini:
 
     def _build_context(self, chat_id: int) -> str:
         """Build context from recent messages"""
-        messages = get_recent_messages(chat_id, limit=20)
+        messages = get_recent_messages(chat_id, limit=50)
 
         if not messages:
             return "нет предыдущих сообщений"

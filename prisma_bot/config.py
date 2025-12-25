@@ -177,10 +177,10 @@ TRIGGER_KEYWORDS = [
 ]
 
 # Proactive settings
-SILENCE_KICK_HOURS = 4  # Hours of silence before gentle kick
+SILENCE_KICK_HOURS = 8  # Hours of silence before gentle kick
 SILENCE_ALARM_HOURS = 24  # Hours of silence before dramatic alarm
 RANDOM_INSIGHT_CHANCE = 0.05  # 5% chance for random insight
-PROACTIVE_CHECK_MINUTES = 30  # Check every 30 minutes
+PROACTIVE_CHECK_MINUTES = 420  # Check every 7 hours (420 minutes)
 
 # Daily check-in schedule (UTC times - adjust for your timezone)
 # Spain/Torremolinos is UTC+1 (winter) / UTC+2 (summer)
