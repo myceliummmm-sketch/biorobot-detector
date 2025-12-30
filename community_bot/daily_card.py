@@ -218,10 +218,29 @@ class DailyCardGenerator:
 
     # Модель для генерации изображений - ТОЛЬКО ЭТА!
     IMAGE_MODEL = "gemini-2.5-flash-image"
+    # Модель для текста идей
+    TEXT_MODEL = "gemini-2.0-flash"
 
     def __init__(self, gemini_client):
         self.gemini = gemini_client
         self.last_generated = None
+        self.idea_model = None
+
+        # Создаём отдельную модель для генерации идей с большим лимитом токенов
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=GEMINI_API_KEY)
+            self.idea_model = genai.GenerativeModel(
+                model_name=self.TEXT_MODEL,
+                generation_config={
+                    "max_output_tokens": 8192,
+                    "temperature": 0.9,
+                }
+            )
+            logger.info(f"Idea model initialized: {self.TEXT_MODEL} with 8192 tokens")
+        except Exception as e:
+            logger.error(f"Could not init idea model: {e}")
+
         logger.info(f"DailyCardGenerator initialized, will use {self.IMAGE_MODEL}")
 
     async def generate_idea(self) -> Tuple[Optional[str], str]:
@@ -229,16 +248,16 @@ class DailyCardGenerator:
         prompt, category = get_idea_prompt()
 
         try:
-            # Используем больший лимит токенов для полной идеи
-            import google.generativeai as genai
-            response = self.gemini.model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    max_output_tokens=4096,  # Больше токенов для полной идеи
-                    temperature=0.9,
-                )
-            )
-            return response.text.strip(), category
+            if self.idea_model:
+                # Используем отдельную модель с высоким лимитом токенов
+                response = self.idea_model.generate_content(prompt)
+            else:
+                # Fallback на основную модель
+                response = self.gemini.model.generate_content(prompt)
+
+            text = response.text.strip()
+            logger.info(f"Generated idea text length: {len(text)} chars")
+            return text, category
         except Exception as e:
             logger.error(f"Error generating idea: {e}")
             return None, category
