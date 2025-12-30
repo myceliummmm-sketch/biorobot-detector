@@ -1,8 +1,16 @@
 import logging
 import random
 import asyncio
+import io
+from datetime import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+try:
+    import pytz
+    PYTZ_AVAILABLE = True
+except ImportError:
+    PYTZ_AVAILABLE = False
 
 from config import (
     COMMUNITY_BOT_TOKEN,
@@ -12,6 +20,7 @@ from config import (
     BOT_NAME
 )
 from gemini_client import get_gemini_client
+from daily_card import get_card_generator
 
 # Configure logging
 logging.basicConfig(
@@ -19,6 +28,9 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Timezone for Spain
+TIMEZONE = "Europe/Madrid"
 
 
 def should_respond(message_text: str, is_reply_to_bot: bool, is_mention: bool) -> bool:
@@ -178,7 +190,8 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"Статус: Живой, как мицелий в лесу\n"
         f"Активных чатов в памяти: {chat_count}\n"
-        f"Вероятность ответа: {RESPONSE_PROBABILITY * 100:.0f}%"
+        f"Вероятность ответа: {RESPONSE_PROBABILITY * 100:.0f}%\n"
+        f"Карточка дня: 17:00 (Madrid)"
     )
 
 
@@ -189,6 +202,71 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gemini.clear_history(chat_id)
 
     await update.message.reply_text("Память очищена. Кто вы все такие?")
+
+
+async def card_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /card command - generate and send daily card manually"""
+    chat_id = update.message.chat_id
+
+    await update.message.reply_text("⏳ генерирую карточку дня...")
+
+    try:
+        gemini = get_gemini_client()
+        card_gen = get_card_generator(gemini)
+
+        caption, image_bytes = await card_gen.generate_daily_card()
+
+        if caption:
+            if image_bytes:
+                # Send with image
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=io.BytesIO(image_bytes),
+                    caption=caption[:1024]  # Telegram caption limit
+                )
+            else:
+                # Send text only
+                await context.bot.send_message(chat_id=chat_id, text=caption)
+
+            logger.info("Daily card sent successfully")
+        else:
+            await update.message.reply_text("❌ не удалось сгенерировать карточку")
+
+    except Exception as e:
+        logger.error(f"Error generating card: {e}")
+        await update.message.reply_text(f"❌ ошибка: {str(e)[:100]}")
+
+
+async def daily_card_job(context: ContextTypes.DEFAULT_TYPE):
+    """Scheduled job to post daily card at 17:00"""
+    if not COMMUNITY_CHAT_ID:
+        logger.warning("COMMUNITY_CHAT_ID not set, skipping daily card")
+        return
+
+    logger.info("Running daily card job...")
+
+    try:
+        gemini = get_gemini_client()
+        card_gen = get_card_generator(gemini)
+
+        caption, image_bytes = await card_gen.generate_daily_card()
+
+        if caption:
+            if image_bytes:
+                await context.bot.send_photo(
+                    chat_id=COMMUNITY_CHAT_ID,
+                    photo=io.BytesIO(image_bytes),
+                    caption=caption[:1024]
+                )
+            else:
+                await context.bot.send_message(chat_id=COMMUNITY_CHAT_ID, text=caption)
+
+            logger.info("Daily card posted to community chat")
+        else:
+            logger.error("Failed to generate daily card")
+
+    except Exception as e:
+        logger.error(f"Error in daily card job: {e}")
 
 
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -228,13 +306,14 @@ def main():
 
     logger.info("Starting community bot...")
 
-    # Create application
+    # Create application with job queue
     app = Application.builder().token(COMMUNITY_BOT_TOKEN).build()
 
     # Add handlers
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("clear", clear_command))
+    app.add_handler(CommandHandler("card", card_command))
 
     # Message handler for group chats
     app.add_handler(MessageHandler(
@@ -253,6 +332,25 @@ def main():
         filters.StatusUpdate.NEW_CHAT_MEMBERS,
         welcome_new_member
     ))
+
+    # Schedule daily card at 17:00 Madrid time
+    job_queue = app.job_queue
+    if PYTZ_AVAILABLE:
+        tz = pytz.timezone(TIMEZONE)
+        job_queue.run_daily(
+            daily_card_job,
+            time=time(hour=17, minute=0, tzinfo=tz),
+            name="daily_card"
+        )
+        logger.info("Scheduled daily card job at 17:00 Madrid time")
+    else:
+        # Fallback: UTC+1 approximately
+        job_queue.run_daily(
+            daily_card_job,
+            time=time(hour=16, minute=0),  # UTC, roughly Spain
+            name="daily_card"
+        )
+        logger.warning("pytz not available, using UTC time for daily card")
 
     # Start polling
     logger.info(f"{BOT_NAME} bot starting... Press Ctrl+C to stop.")
