@@ -31,6 +31,7 @@ class BotSettings(Base):
     chat_id = Column(BigInteger, unique=True, index=True)
     last_message_at = Column(DateTime, default=datetime.utcnow)
     last_kick_at = Column(DateTime, nullable=True)
+    is_muted = Column(Integer, default=0)  # 0 = active, 1 = muted
 
 
 class PermanentMemory(Base):
@@ -276,3 +277,42 @@ def get_memory_context(chat_id: int, limit: int = 20) -> str:
     except Exception as e:
         logger.error(f"Error getting memory context: {e}")
         return ""
+
+
+# === MUTE FUNCTIONS ===
+
+def is_chat_muted(chat_id: int) -> bool:
+    """Check if chat is muted"""
+    try:
+        session = get_session()
+        settings = session.query(BotSettings).filter(
+            BotSettings.chat_id == chat_id
+        ).first()
+        session.close()
+        return settings.is_muted == 1 if settings else False
+    except Exception as e:
+        logger.error(f"Error checking mute status: {e}")
+        return False
+
+
+def set_chat_muted(chat_id: int, muted: bool) -> bool:
+    """Set chat mute status"""
+    try:
+        session = get_session()
+        settings = session.query(BotSettings).filter(
+            BotSettings.chat_id == chat_id
+        ).first()
+
+        if settings:
+            settings.is_muted = 1 if muted else 0
+        else:
+            settings = BotSettings(chat_id=chat_id, is_muted=1 if muted else 0)
+            session.add(settings)
+
+        session.commit()
+        session.close()
+        logger.info(f"Chat {chat_id} mute status: {muted}")
+        return True
+    except Exception as e:
+        logger.error(f"Error setting mute status: {e}")
+        return False

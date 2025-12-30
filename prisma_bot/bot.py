@@ -36,7 +36,9 @@ from database import (
     get_today_messages,
     get_all_memories,
     add_memory,
-    delete_memory
+    delete_memory,
+    is_chat_muted,
+    set_chat_muted
 )
 from gemini_client import get_prisma_client
 from google_docs_client import get_docs_client
@@ -633,6 +635,39 @@ async def github_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"○ ошибка: {str(e)[:100]}")
 
 
+async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /mute - toggle mute status (admin only)"""
+    user = update.message.from_user
+    username = user.username or ""
+    chat_id = update.message.chat_id
+
+    # Check if user is admin
+    if username.lower() != ADMIN_USERNAME.lower():
+        await update.message.reply_text("○ эта команда только для Артема")
+        return
+
+    # Check current status and toggle
+    currently_muted = is_chat_muted(chat_id)
+
+    if currently_muted:
+        # Unmute
+        set_chat_muted(chat_id, False)
+        await update.message.reply_text(
+            "🔔 prisma снова активна!\n\n"
+            "● буду писать чекины и напоминания\n"
+            "● отвечаю на сообщения как обычно"
+        )
+    else:
+        # Mute
+        set_chat_muted(chat_id, True)
+        await update.message.reply_text(
+            "🔕 prisma в тихом режиме\n\n"
+            "○ не пишу чекины и напоминания\n"
+            "○ отвечаю только когда позовёшь\n\n"
+            "/mute — включить обратно"
+        )
+
+
 async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
     """Proactive check - kick silent chats"""
 
@@ -650,6 +685,10 @@ async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
 
     for chat_id in chats:
         try:
+            # Skip muted chats
+            if is_chat_muted(chat_id):
+                continue
+
             silence = get_silence_duration(chat_id)
 
             kick_type = None
@@ -713,6 +752,10 @@ async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
 
     for chat_id in chats:
         try:
+            # Skip muted chats
+            if is_chat_muted(chat_id):
+                continue
+
             prisma = get_prisma_client()
 
             # Get checkin prompt
@@ -748,6 +791,7 @@ def main():
     # Add handlers
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("status", status_command))
+    app.add_handler(CommandHandler("mute", mute_command))
     app.add_handler(CommandHandler("prompt", prompt_command))
     app.add_handler(CommandHandler("memory", memory_command))
     app.add_handler(CommandHandler("youtube", youtube_command))
