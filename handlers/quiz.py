@@ -4,10 +4,11 @@ import traceback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from config import MYCELIUM_APP_URL
+from config import MYCELIUM_APP_URL, TMA_VISION_URL, DESKTOP_APP_URL
 from content.messages import RESULT_HIGH_SCORE, RESULT_WITH_BLOCKER
 from content.videos import VIDEOS
 from database import get_session, User
+from database.supabase_client import get_supabase_client
 from .sequences import cancel_jobs, schedule_sequence_b
 
 logger = logging.getLogger(__name__)
@@ -140,3 +141,35 @@ async def quiz_result_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     except Exception as db_err:
         logger.error(f"DB error (video already sent): {db_err}")
+
+    # SYNC TO SUPABASE: Send quiz results to the Syndicate
+    try:
+        supabase = get_supabase_client()
+        if supabase.is_enabled:
+            await supabase.sync_user_status(
+                telegram_id=user.id,
+                username=user.username,
+                first_name=user.first_name,
+                quiz_blocker=blocker,
+                assigned_character=char_key,
+                quiz_score=score,
+                onboarding_step="quiz_complete"
+            )
+            logger.info(f"User {user.id} synced to Supabase: blocker={blocker}, char={char_key}")
+
+            # Send follow-up message with Identity Card CTA
+            follow_up = f"""🎭 Твой Identity Card готов в Синдикате.
+
+{char_name} теперь твой проводник. Страх "{blocker}" — это не приговор, а точка роста.
+
+Давай превратим видение в актив. Опиши свою идею за 30 секунд 👇"""
+
+            vision_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🃏 Start Vision Card", url=TMA_VISION_URL)],
+                [InlineKeyboardButton("💻 Open Desktop App", url=DESKTOP_APP_URL)]
+            ])
+
+            await update.message.reply_text(text=follow_up, reply_markup=vision_keyboard)
+
+    except Exception as sync_err:
+        logger.error(f"Supabase sync error: {sync_err}")

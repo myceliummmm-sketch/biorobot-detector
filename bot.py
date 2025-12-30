@@ -4,7 +4,13 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from config import BOT_TOKEN, DATABASE_URL
 from database import init_db
-from handlers import start_handler, quiz_result_handler, video_handler, download_all_handler
+from handlers import (
+    start_handler,
+    quiz_result_handler,
+    video_handler,
+    download_all_handler,
+    status_handler
+)
 
 # Configure logging
 logging.basicConfig(
@@ -31,6 +37,7 @@ def main():
 
     # Add handlers
     app.add_handler(CommandHandler("start", start_handler))
+    app.add_handler(CommandHandler("status", status_handler))
     app.add_handler(CommandHandler("download_all", download_all_handler))
     app.add_handler(MessageHandler(
         filters.StatusUpdate.WEB_APP_DATA,
