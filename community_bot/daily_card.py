@@ -5,10 +5,24 @@ import base64
 from datetime import datetime
 from typing import Optional, Tuple
 
-import google.generativeai as genai
 from config import GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
+
+# Lazy import для genai
+genai = None
+
+def _get_genai():
+    """Lazy import google.generativeai"""
+    global genai
+    if genai is None:
+        try:
+            import google.generativeai as _genai
+            genai = _genai
+        except ImportError:
+            logger.error("google-generativeai not installed")
+            return None
+    return genai
 
 # ═══════════════════════════════════════
 # ПРОМПТЫ ИЗ MCARDS - Low-poly 3D стиль
@@ -203,15 +217,18 @@ class DailyCardGenerator:
         self.imagen_model = None
 
         # Инициализируем модель для генерации изображений
-        if GEMINI_API_KEY:
+        genai = _get_genai()
+        if genai and GEMINI_API_KEY:
             genai.configure(api_key=GEMINI_API_KEY)
             try:
                 self.imagen_model = genai.GenerativeModel(self.IMAGE_MODEL)
                 logger.info(f"Image model initialized: {self.IMAGE_MODEL}")
             except Exception as e:
                 logger.error(f"Could not init image model: {e}")
-        else:
+        elif not GEMINI_API_KEY:
             logger.warning("GEMINI_API_KEY not set")
+        else:
+            logger.warning("google-generativeai not available")
 
     async def generate_idea(self) -> Tuple[Optional[str], str]:
         """Генерирует текст бизнес-идеи"""
@@ -235,6 +252,11 @@ class DailyCardGenerator:
         logger.info(f"Generating image with {self.IMAGE_MODEL}: {image_prompt[:80]}...")
 
         try:
+            genai = _get_genai()
+            if not genai:
+                logger.error("genai not available for image generation")
+                return None
+
             response = self.imagen_model.generate_content(
                 image_prompt,
                 generation_config=genai.GenerationConfig(
