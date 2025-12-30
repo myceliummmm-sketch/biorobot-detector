@@ -42,6 +42,7 @@ from gemini_client import get_prisma_client
 from google_docs_client import get_docs_client
 from github_client import get_github_client
 from youtube_client import get_youtube_client
+from daily_card import get_card_generator
 
 # Configure logging
 logging.basicConfig(
@@ -633,6 +634,40 @@ async def github_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"○ ошибка: {str(e)[:100]}")
 
 
+async def card_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /card command - generate daily business idea card"""
+    import io
+    chat_id = update.message.chat_id
+
+    await update.message.reply_text("⏳ генерирую карточку дня...")
+
+    try:
+        prisma = get_prisma_client()
+        card_gen = get_card_generator(prisma)
+
+        caption, image_bytes = await card_gen.generate_daily_card()
+
+        if caption:
+            if image_bytes:
+                # Send with image
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=io.BytesIO(image_bytes),
+                    caption=caption[:1024]  # Telegram caption limit
+                )
+            else:
+                # Send text only
+                await context.bot.send_message(chat_id=chat_id, text=caption)
+
+            logger.info("Daily card sent successfully")
+        else:
+            await update.message.reply_text("○ не удалось сгенерировать карточку")
+
+    except Exception as e:
+        logger.error(f"Card command error: {e}")
+        await update.message.reply_text(f"○ ошибка: {str(e)[:100]}")
+
+
 async def proactive_check(context: ContextTypes.DEFAULT_TYPE):
     """Proactive check - kick silent chats"""
 
@@ -753,6 +788,7 @@ def main():
     app.add_handler(CommandHandler("youtube", youtube_command))
     app.add_handler(CommandHandler("upload", upload_command))
     app.add_handler(CommandHandler("github", github_command))
+    app.add_handler(CommandHandler("card", card_command))
 
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
