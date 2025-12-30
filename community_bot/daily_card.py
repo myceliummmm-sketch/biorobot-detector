@@ -2,6 +2,7 @@
 import logging
 import random
 import base64
+import io
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -9,20 +10,27 @@ from config import GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
 
-# Lazy import для genai
-genai = None
+# Lazy imports
+_genai_client = None
+_genai_types = None
 
-def _get_genai():
-    """Lazy import google.generativeai"""
-    global genai
-    if genai is None:
+def _get_image_client():
+    """Lazy import google.genai for image generation"""
+    global _genai_client, _genai_types
+    if _genai_client is None:
         try:
-            import google.generativeai as _genai
-            genai = _genai
+            from google import genai
+            from google.genai import types
+            _genai_client = genai.Client(api_key=GEMINI_API_KEY)
+            _genai_types = types
+            logger.info("google-genai client initialized")
         except ImportError:
-            logger.error("google-generativeai not installed")
-            return None
-    return genai
+            logger.error("google-genai not installed")
+            return None, None
+        except Exception as e:
+            logger.error(f"Error initializing genai client: {e}")
+            return None, None
+    return _genai_client, _genai_types
 
 # ═══════════════════════════════════════
 # ПРОМПТЫ ИЗ MCARDS - Low-poly 3D стиль
@@ -214,21 +222,7 @@ class DailyCardGenerator:
     def __init__(self, gemini_client):
         self.gemini = gemini_client
         self.last_generated = None
-        self.imagen_model = None
-
-        # Инициализируем модель для генерации изображений
-        genai = _get_genai()
-        if genai and GEMINI_API_KEY:
-            genai.configure(api_key=GEMINI_API_KEY)
-            try:
-                self.imagen_model = genai.GenerativeModel(self.IMAGE_MODEL)
-                logger.info(f"Image model initialized: {self.IMAGE_MODEL}")
-            except Exception as e:
-                logger.error(f"Could not init image model: {e}")
-        elif not GEMINI_API_KEY:
-            logger.warning("GEMINI_API_KEY not set")
-        else:
-            logger.warning("google-generativeai not available")
+        logger.info(f"DailyCardGenerator initialized, will use {self.IMAGE_MODEL}")
 
     async def generate_idea(self) -> Tuple[Optional[str], str]:
         """Генерирует текст бизнес-идеи"""
@@ -242,37 +236,34 @@ class DailyCardGenerator:
             return None, category
 
     async def generate_card_image(self, category: str) -> Optional[bytes]:
-        """Генерирует изображение через Gemini 2.0 Flash Image"""
+        """Генерирует изображение через Gemini 2.5 Flash Image (новый SDK)"""
 
-        if not self.imagen_model:
-            logger.warning("Image model not available")
+        client, types = _get_image_client()
+        if not client or not types:
+            logger.warning("Image client not available")
             return None
 
         image_prompt = get_image_prompt(category)
         logger.info(f"Generating image with {self.IMAGE_MODEL}: {image_prompt[:80]}...")
 
         try:
-            genai = _get_genai()
-            if not genai:
-                logger.error("genai not available for image generation")
-                return None
-
-            response = self.imagen_model.generate_content(
-                image_prompt,
-                generation_config=genai.GenerationConfig(
-                    response_modalities=["image", "text"]
+            response = client.models.generate_content(
+                model=self.IMAGE_MODEL,
+                contents=image_prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["IMAGE"],
                 )
             )
 
             # Извлекаем изображение из ответа
-            if response.candidates:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                        image_data = part.inline_data.data
-                        logger.info("Image generated successfully!")
-                        if isinstance(image_data, str):
-                            return base64.b64decode(image_data)
-                        return image_data
+            for part in response.parts:
+                if part.inline_data is not None:
+                    # Получаем байты изображения
+                    image_data = part.inline_data.data
+                    logger.info("Image generated successfully!")
+                    if isinstance(image_data, str):
+                        return base64.b64decode(image_data)
+                    return image_data
 
             logger.warning("No image in response")
             return None
