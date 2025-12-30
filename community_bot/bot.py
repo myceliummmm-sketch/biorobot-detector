@@ -218,12 +218,14 @@ async def card_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if caption:
             if image_bytes:
-                # Send with image
+                # Send image first with short intro
                 await context.bot.send_photo(
                     chat_id=chat_id,
                     photo=io.BytesIO(image_bytes),
-                    caption=caption[:1024]  # Telegram caption limit
+                    caption="🎴 карточка дня от токсика"
                 )
+                # Then send full text
+                await context.bot.send_message(chat_id=chat_id, text=caption)
             else:
                 # Send text only
                 await context.bot.send_message(chat_id=chat_id, text=caption)
@@ -253,11 +255,14 @@ async def daily_card_job(context: ContextTypes.DEFAULT_TYPE):
 
         if caption:
             if image_bytes:
+                # Send image first with short intro
                 await context.bot.send_photo(
                     chat_id=COMMUNITY_CHAT_ID,
                     photo=io.BytesIO(image_bytes),
-                    caption=caption[:1024]
+                    caption="🎴 карточка дня от токсика"
                 )
+                # Then send full text
+                await context.bot.send_message(chat_id=COMMUNITY_CHAT_ID, text=caption)
             else:
                 await context.bot.send_message(chat_id=COMMUNITY_CHAT_ID, text=caption)
 
