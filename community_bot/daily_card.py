@@ -195,7 +195,7 @@ class DailyCardGenerator:
     """Генератор ежедневных карточек"""
 
     # Модель для генерации изображений - ТОЛЬКО ЭТА!
-    IMAGE_MODEL = "gemini-2.0-flash-exp"
+    IMAGE_MODEL = "gemini-2.5-flash-image"
 
     def __init__(self, gemini_client):
         self.gemini = gemini_client
