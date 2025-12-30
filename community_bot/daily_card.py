@@ -194,22 +194,24 @@ def get_toxic_caption(idea_text: str) -> str:
 class DailyCardGenerator:
     """Генератор ежедневных карточек"""
 
+    # Модель для генерации изображений - ТОЛЬКО ЭТА!
+    IMAGE_MODEL = "gemini-2.0-flash-exp"
+
     def __init__(self, gemini_client):
         self.gemini = gemini_client
         self.last_generated = None
+        self.imagen_model = None
 
-        # Инициализируем отдельную модель для генерации изображений
+        # Инициализируем модель для генерации изображений
         if GEMINI_API_KEY:
             genai.configure(api_key=GEMINI_API_KEY)
             try:
-                # Используем Gemini 2.0 Flash для генерации изображений
-                self.imagen_model = genai.GenerativeModel("gemini-2.0-flash-exp")
-                logger.info("Imagen model initialized")
+                self.imagen_model = genai.GenerativeModel(self.IMAGE_MODEL)
+                logger.info(f"Image model initialized: {self.IMAGE_MODEL}")
             except Exception as e:
-                logger.warning(f"Could not init imagen model: {e}")
-                self.imagen_model = None
+                logger.error(f"Could not init image model: {e}")
         else:
-            self.imagen_model = None
+            logger.warning("GEMINI_API_KEY not set")
 
     async def generate_idea(self) -> Tuple[Optional[str], str]:
         """Генерирует текст бизнес-идеи"""
@@ -223,14 +225,14 @@ class DailyCardGenerator:
             return None, category
 
     async def generate_card_image(self, category: str) -> Optional[bytes]:
-        """Генерирует изображение через Gemini"""
+        """Генерирует изображение через Gemini 2.0 Flash Image"""
 
         if not self.imagen_model:
-            logger.warning("Imagen model not available")
+            logger.warning("Image model not available")
             return None
 
         image_prompt = get_image_prompt(category)
-        logger.info(f"Generating image with prompt: {image_prompt[:100]}...")
+        logger.info(f"Generating image with {self.IMAGE_MODEL}: {image_prompt[:80]}...")
 
         try:
             response = self.imagen_model.generate_content(
@@ -240,13 +242,13 @@ class DailyCardGenerator:
                 )
             )
 
-            # Извлекаем изображение
+            # Извлекаем изображение из ответа
             if response.candidates:
                 for part in response.candidates[0].content.parts:
                     if hasattr(part, 'inline_data') and part.inline_data:
                         image_data = part.inline_data.data
+                        logger.info("Image generated successfully!")
                         if isinstance(image_data, str):
-                            # Base64 encoded
                             return base64.b64decode(image_data)
                         return image_data
 
