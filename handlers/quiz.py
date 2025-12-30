@@ -171,5 +171,18 @@ async def quiz_result_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
             await update.message.reply_text(text=follow_up, reply_markup=vision_keyboard)
 
+            # Send community invite
+            community_msg = """🌐 Присоединяйся к Syndicate Builders!
+
+Делимся опытом, разбираем кейсы и разыгрываем призы за лучшие проекты.
+
+Здесь строят вместе 👇"""
+
+            community_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🚀 Войти в комьюнити", url="https://t.me/mDAOsists")]
+            ])
+
+            await update.message.reply_text(text=community_msg, reply_markup=community_keyboard)
+
     except Exception as sync_err:
         logger.error(f"Supabase sync error: {sync_err}")
