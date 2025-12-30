@@ -229,7 +229,15 @@ class DailyCardGenerator:
         prompt, category = get_idea_prompt()
 
         try:
-            response = self.gemini.model.generate_content(prompt)
+            # Используем больший лимит токенов для полной идеи
+            import google.generativeai as genai
+            response = self.gemini.model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    max_output_tokens=4096,  # Больше токенов для полной идеи
+                    temperature=0.9,
+                )
+            )
             return response.text.strip(), category
         except Exception as e:
             logger.error(f"Error generating idea: {e}")
