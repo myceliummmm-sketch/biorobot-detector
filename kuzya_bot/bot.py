@@ -19,9 +19,10 @@ except ImportError:
 
 from config import (
     KUZYA_BOT_TOKEN, BOT_NAME, BOT_NAMES,
-    FAMILY_CHAT_ID, TIMEZONE, CHECKIN_MESSAGES, CHECKIN_TIMES
+    TIMEZONE, CHECKIN_MESSAGES, CHECKIN_TIMES
 )
 from gemini_client import get_kuzya_client
+from database import register_chat, get_all_active_chats, remove_chat
 
 # Configure logging
 logging.basicConfig(
@@ -71,6 +72,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass  # 30% chance on questions
     else:
         return
+
+    # Register chat for check-ins
+    chat_title = message.chat.title if message.chat.type != "private" else user_name
+    register_chat(chat_id, chat_title)
 
     # Show typing
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
@@ -263,17 +268,23 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
-    """Send daily check-in message to family chat"""
-    if not FAMILY_CHAT_ID:
-        logger.warning("FAMILY_CHAT_ID not set, skipping check-in")
+    """Send daily check-in message to all active chats"""
+    active_chats = get_all_active_chats()
+
+    if not active_chats:
+        logger.info("No active chats for check-in")
         return
 
-    try:
-        message = random.choice(CHECKIN_MESSAGES)
-        await context.bot.send_message(chat_id=FAMILY_CHAT_ID, text=message)
-        logger.info(f"Sent check-in to family chat: {message[:30]}...")
-    except Exception as e:
-        logger.error(f"Check-in error: {e}")
+    for chat_id in active_chats:
+        try:
+            message = random.choice(CHECKIN_MESSAGES)
+            await context.bot.send_message(chat_id=chat_id, text=message)
+            logger.info(f"Sent check-in to {chat_id}: {message[:30]}...")
+        except Exception as e:
+            logger.error(f"Check-in error for {chat_id}: {e}")
+            # If bot was blocked/kicked, remove from active chats
+            if "bot was blocked" in str(e).lower() or "chat not found" in str(e).lower():
+                remove_chat(chat_id)
 
 
 def main():
@@ -295,8 +306,8 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
-    # Schedule daily check-ins
-    if FAMILY_CHAT_ID and PYTZ_AVAILABLE:
+    # Schedule daily check-ins to all active chats
+    if PYTZ_AVAILABLE:
         job_queue = app.job_queue
         tz = pytz.timezone(TIMEZONE)
 
@@ -304,10 +315,8 @@ def main():
             checkin_time = time(hour=hour, minute=minute, tzinfo=tz)
             job_queue.run_daily(daily_checkin, time=checkin_time)
             logger.info(f"Scheduled check-in at {hour:02d}:{minute:02d} {TIMEZONE}")
-    elif FAMILY_CHAT_ID:
-        logger.warning("pytz not available, daily check-ins disabled")
     else:
-        logger.info("FAMILY_CHAT_ID not set, check-ins disabled")
+        logger.warning("pytz not available, daily check-ins disabled")
 
     logger.info(f"{BOT_NAME} starting... Press Ctrl+C to stop.")
     app.run_polling(allowed_updates=Update.ALL_TYPES)

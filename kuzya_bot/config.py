@@ -9,9 +9,6 @@ KUZYA_BOT_TOKEN = os.getenv("KUZYA_BOT_TOKEN")
 # Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Chat ID for proactive messages (family chat)
-FAMILY_CHAT_ID = os.getenv("FAMILY_CHAT_ID")
-
 # Timezone
 TIMEZONE = "Europe/Moscow"
 
