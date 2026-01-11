@@ -18,7 +18,7 @@ class KuzyaClient:
 
     def __init__(self):
         self.model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash",
+            model_name="models/gemini-2.0-flash",
             generation_config={
                 "temperature": 0.7,
                 "max_output_tokens": 1024,
