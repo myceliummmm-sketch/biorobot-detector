@@ -33,6 +33,54 @@ logger = logging.getLogger(__name__)
 TIMEZONE = "Europe/Madrid"
 
 
+async def handle_new_member_intro(update: Update, context: ContextTypes.DEFAULT_TYPE, intro_data: dict):
+    """Handle new member's response to welcome questions - develop dialogue about their project"""
+    message = update.message
+    user = message.from_user
+    chat_id = message.chat_id
+    user_name = intro_data.get("name", user.first_name)
+
+    logger.info(f"Processing intro from {user_name}: {message.text[:100]}")
+
+    # Show typing indicator
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    await asyncio.sleep(random.uniform(1.5, 3.0))
+
+    # Generate contextual response with Gemini
+    try:
+        gemini = get_gemini_client()
+
+        intro_prompt = f"""Ты Toxic — привратник лобби Syndicate Builders. Новый участник {user_name} ответил на твои вопросы о проекте/экспертизе:
+
+"{message.text}"
+
+Твоя задача:
+1. Проанализировать ответ — есть ли у человека реальный проект или экспертиза
+2. Задать уточняющие вопросы если нужно
+3. Если проект интересный — похвалить и спросить детали
+4. Если пока нет проекта — спросить что хочет построить
+5. Если есть экспертиза — спросить как может помочь другим
+
+Отвечай в своём стиле: прямо, с иронией, но дружелюбно. 2-4 предложения.
+Если ответ крутой — можешь намекнуть что такие люди нам нужны внутри."""
+
+        response = await gemini.generate_response(chat_id, user_name, intro_prompt)
+        await message.reply_text(response)
+
+        # Update intro stage
+        context.bot_data["pending_intros"][user.id]["stage"] = "in_dialogue"
+        context.bot_data["pending_intros"][user.id]["messages"] = intro_data.get("messages", 0) + 1
+
+        # After 3 exchanges, remove from pending (dialogue complete)
+        if context.bot_data["pending_intros"][user.id]["messages"] >= 3:
+            del context.bot_data["pending_intros"][user.id]
+            logger.info(f"Completed intro dialogue with {user_name}")
+
+    except Exception as e:
+        logger.error(f"Error in intro dialogue: {e}")
+        await message.reply_text("хм, интересно. расскажи подробнее — что конкретно строишь или хочешь построить?")
+
+
 def should_respond(message_text: str, is_reply_to_bot: bool, is_mention: bool) -> bool:
     """Determine if bot should respond to this message"""
     # Always respond to direct replies and mentions
@@ -71,6 +119,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info("Skipping own bot message")
         return
 
+    # Check if this is a new member responding to welcome questions
+    pending_intros = context.bot_data.get("pending_intros", {})
+    is_new_member_intro = user.id in pending_intros
+
     # Check if this is a reply to the bot
     is_reply_to_bot = (
         message.reply_to_message and
@@ -85,6 +137,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if bot is called by name (toxic, токсик)
     text_lower = message.text.lower()
     is_called_by_name = any(name in text_lower for name in ["toxic", "токсик", "токсика", "токсику"])
+
+    # Always respond to new member intros
+    if is_new_member_intro and is_reply_to_bot:
+        await handle_new_member_intro(update, context, pending_intros[user.id])
+        return
 
     # Decide if we should respond
     if not should_respond(message.text, is_reply_to_bot, is_mention or is_called_by_name):
@@ -176,9 +233,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
     await update.message.reply_text(
-        f"Привет, биоробот! Я {BOT_NAME} — твой ироничный друг из мира грибниц.\n\n"
-        "Буду тусить в чате, подкалывать и иногда даже помогать. "
-        "Если что-то про Mycelium Cards хочешь узнать — спрашивай, расскажу как не быть NPC в своей жизни"
+        f"☢️ Это лобби Syndicate Builders.\n\n"
+        f"Я {BOT_NAME} — привратник. Здесь собираются те, кто строит проекты, а не мечтает о них.\n\n"
+        "Внутрь попадают:\n"
+        "🔹 Билдеры с реальными проектами\n"
+        "🔹 Эксперты с полезными скиллами\n"
+        "🔹 Вайбкодеры с крутыми идеями\n\n"
+        "Расскажи о себе — и посмотрим, готов ли ты к грибнице 🍄"
     )
 
 
@@ -275,7 +336,7 @@ async def daily_card_job(context: ContextTypes.DEFAULT_TYPE):
 
 
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Welcome new members to the chat"""
+    """Welcome new members to the lobby - ask about projects and expertise"""
     message = update.message
     if not message or not message.new_chat_members:
         return
@@ -289,18 +350,34 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         user_name = new_member.first_name or new_member.username or "биоробот"
 
-        logger.info(f"New member joined: {user_name}")
+        logger.info(f"New member joined lobby: {user_name}")
 
-        # Generate personalized welcome with Gemini
-        try:
-            gemini = get_gemini_client()
-            welcome_prompt = f"поприветствуй нового участника чата по имени {user_name}, коротко и дружелюбно"
-            response = await gemini.generate_response(chat_id, "система", welcome_prompt)
-            await message.reply_text(response)
-        except Exception as e:
-            logger.error(f"Error welcoming new member: {e}")
-            # Fallback welcome
-            await message.reply_text(f"о, {user_name} заходит! добро пожаловать в грибницу 🍄")
+        # Show typing indicator
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        await asyncio.sleep(random.uniform(1.0, 2.0))
+
+        # Welcome message as lobby gatekeeper
+        welcome_text = f"""☢️ о, {user_name}! Добро пожаловать в лобби Syndicate.
+
+Здесь собираются билдеры — те, кто строит, а не просто мечтает.
+
+Расскажи о себе:
+🔹 Есть проект? Над чем работаешь?
+🔹 Какая помощь нужна?
+🔹 Какой экспертизой можешь поделиться?
+
+Внутрь пускаем тех, кто реально строит или может усилить команду. Покажи что у тебя есть — и поговорим 🍄"""
+
+        await message.reply_text(welcome_text)
+
+        # Store that we're waiting for intro from this user
+        if "pending_intros" not in context.bot_data:
+            context.bot_data["pending_intros"] = {}
+        context.bot_data["pending_intros"][new_member.id] = {
+            "name": user_name,
+            "chat_id": chat_id,
+            "stage": "awaiting_intro"
+        }
 
 
 def main():
