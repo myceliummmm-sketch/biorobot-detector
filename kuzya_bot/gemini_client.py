@@ -61,7 +61,8 @@ class KuzyaClient:
                 prompt += f" с подписью: {caption}"
             prompt += "\n\nОпиши что видишь и ответь на вопрос если есть."
 
-            response = await self.model.generate_content_async([prompt, image])
+            # Use sync version - works better with images
+            response = self.model.generate_content([prompt, image])
 
             return response.text.strip()
 
