@@ -22,7 +22,7 @@ class KuzyaClient:
             model_name="models/gemini-3-flash-preview",
             generation_config={
                 "temperature": 0.7,
-                "max_output_tokens": 1024,
+                "max_output_tokens": 4096,
             },
             system_instruction=SYSTEM_PROMPT
         )
@@ -60,7 +60,7 @@ class KuzyaClient:
 
 [{user_name}]: {message}
 
-Ответь кратко и по делу:"""
+Ответь:"""
 
             response = self.model.generate_content(prompt)
 
