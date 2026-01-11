@@ -4,7 +4,7 @@ import traceback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from config import MYCELIUM_APP_URL, TMA_VISION_URL, DESKTOP_APP_URL
+from config import MYCELIUM_APP_URL
 from content.messages import RESULT_HIGH_SCORE, RESULT_WITH_BLOCKER
 from content.videos import VIDEOS
 from database import get_session, User
@@ -94,7 +94,7 @@ async def quiz_result_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         video_key = f"{char_key}_blocker"
 
     keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("✨ Начать Vision Phase", url=MYCELIUM_APP_URL)
+        InlineKeyboardButton("🖥 Открыть на десктопе", url=MYCELIUM_APP_URL)
     ]])
 
     # FIRST: Send video/message (before DB operations!)
@@ -157,32 +157,21 @@ async def quiz_result_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             logger.info(f"User {user.id} synced to Supabase: blocker={blocker}, char={char_key}")
 
-            # Send follow-up message with Identity Card CTA
-            follow_up = f"""🎭 Твой Identity Card готов в Синдикате.
-
-{char_name} теперь твой проводник. Страх "{blocker}" — это не приговор, а точка роста.
-
-Давай превратим видение в актив. Опиши свою идею за 30 секунд 👇"""
-
-            vision_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🃏 Start Vision Card", url=TMA_VISION_URL)],
-                [InlineKeyboardButton("💻 Open Desktop App", url=DESKTOP_APP_URL)]
-            ])
-
-            await update.message.reply_text(text=follow_up, reply_markup=vision_keyboard)
-
-            # Send community invite
-            community_msg = """🌐 Присоединяйся к Syndicate Builders!
-
-Делимся опытом, разбираем кейсы и разыгрываем призы за лучшие проекты.
-
-Здесь строят вместе 👇"""
-
-            community_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🚀 Войти в комьюнити", url="https://t.me/mDAOsists")]
-            ])
-
-            await update.message.reply_text(text=community_msg, reply_markup=community_keyboard)
-
     except Exception as sync_err:
         logger.error(f"Supabase sync error: {sync_err}")
+
+    # Send community invite for builders
+    try:
+        community_msg = """🔥 Уже строишь проект?
+
+Если есть проект или экспертиза — вступай в клуб билдеров.
+Делимся опытом, разбираем кейсы, помогаем расти."""
+
+        community_keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🚀 Вступить в клуб", url="https://t.me/mDAOsists")]
+        ])
+
+        await update.message.reply_text(text=community_msg, reply_markup=community_keyboard)
+
+    except Exception as e:
+        logger.error(f"Community invite error: {e}")
