@@ -1,16 +1,26 @@
 """
 Кузя - домашний бот-помощник для семьи
-Отвечает на вопросы бабушки и мамы в тёплом домашнем стиле
+Отвечает на вопросы бабушки и мамы как заботливый внук
 """
 
 import logging
 import random
 import asyncio
 import os
+from datetime import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-from config import KUZYA_BOT_TOKEN, BOT_NAME, BOT_NAMES
+try:
+    import pytz
+    PYTZ_AVAILABLE = True
+except ImportError:
+    PYTZ_AVAILABLE = False
+
+from config import (
+    KUZYA_BOT_TOKEN, BOT_NAME, BOT_NAMES,
+    FAMILY_CHAT_ID, TIMEZONE, CHECKIN_MESSAGES, CHECKIN_TIMES
+)
 from gemini_client import get_kuzya_client
 
 # Configure logging
@@ -227,22 +237,20 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start"""
     user_name = update.effective_user.first_name or "друг"
     await update.message.reply_text(
-        f"Здравствуйте, {user_name}! 👋\n\n"
-        f"Я {BOT_NAME} — ваш домашний помощник.\n\n"
-        "Спрашивайте что угодно — постараюсь помочь!\n"
-        "Можете писать текстом или отправлять голосовые сообщения."
+        f"Привет, {user_name}! 👋\n\n"
+        f"Я {BOT_NAME} — всегда на связи, спрашивай что угодно!\n\n"
+        "Можно писать или отправлять голосовые — я всё пойму 🤗"
     )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help"""
     await update.message.reply_text(
-        f"🏠 {BOT_NAME} — домашний помощник\n\n"
-        "Что умею:\n"
-        "• Отвечать на вопросы\n"
-        "• Понимать голосовые сообщения\n"
-        "• Смотреть и обсуждать фотографии\n\n"
-        "Просто напишите или скажите что вас интересует!"
+        f"Я {BOT_NAME}, вот что умею:\n\n"
+        "💬 Отвечать на вопросы\n"
+        "🎤 Понимать голосовые\n"
+        "📷 Смотреть фотки и рассказывать что на них\n\n"
+        "Просто напиши или запиши голосовое! 😊"
     )
 
 
@@ -251,7 +259,21 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     kuzya = get_kuzya_client()
     kuzya.clear_history(chat_id)
-    await update.message.reply_text("История очищена. Начнём с чистого листа!")
+    await update.message.reply_text("Ой, что-то я задумался... О чём мы говорили? 😊")
+
+
+async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
+    """Send daily check-in message to family chat"""
+    if not FAMILY_CHAT_ID:
+        logger.warning("FAMILY_CHAT_ID not set, skipping check-in")
+        return
+
+    try:
+        message = random.choice(CHECKIN_MESSAGES)
+        await context.bot.send_message(chat_id=FAMILY_CHAT_ID, text=message)
+        logger.info(f"Sent check-in to family chat: {message[:30]}...")
+    except Exception as e:
+        logger.error(f"Check-in error: {e}")
 
 
 def main():
@@ -272,6 +294,20 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+
+    # Schedule daily check-ins
+    if FAMILY_CHAT_ID and PYTZ_AVAILABLE:
+        job_queue = app.job_queue
+        tz = pytz.timezone(TIMEZONE)
+
+        for hour, minute in CHECKIN_TIMES:
+            checkin_time = time(hour=hour, minute=minute, tzinfo=tz)
+            job_queue.run_daily(daily_checkin, time=checkin_time)
+            logger.info(f"Scheduled check-in at {hour:02d}:{minute:02d} {TIMEZONE}")
+    elif FAMILY_CHAT_ID:
+        logger.warning("pytz not available, daily check-ins disabled")
+    else:
+        logger.info("FAMILY_CHAT_ID not set, check-ins disabled")
 
     logger.info(f"{BOT_NAME} starting... Press Ctrl+C to stop.")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
