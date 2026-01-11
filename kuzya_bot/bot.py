@@ -83,11 +83,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await asyncio.sleep(random.uniform(0.5, 1.5))
 
     try:
+        # Check if replying to a photo
+        reply_photo_bytes = None
+        if message.reply_to_message and message.reply_to_message.photo:
+            try:
+                photo = message.reply_to_message.photo[-1]
+                file = await context.bot.get_file(photo.file_id)
+                reply_photo_bytes = bytes(await file.download_as_bytearray())
+            except Exception as e:
+                logger.warning(f"Failed to get reply photo: {e}")
+
         # Log user message
         log_message(chat_id, user_name, "user", text)
 
         kuzya = get_kuzya_client()
-        response = await kuzya.generate_response(chat_id, user_name, text)
+
+        # If replying to photo, use image handler
+        if reply_photo_bytes:
+            response = await kuzya.generate_response_with_image(chat_id, user_name, text, reply_photo_bytes)
+        else:
+            response = await kuzya.generate_response(chat_id, user_name, text)
 
         # Log bot response
         log_message(chat_id, BOT_NAME, "assistant", response)
