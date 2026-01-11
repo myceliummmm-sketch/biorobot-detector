@@ -58,17 +58,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message.reply_to_message.from_user.id == context.bot.id
     )
     is_called = any(name in text_lower for name in BOT_NAMES)
+    bot_username = context.bot.username
+    is_mention = f"@{bot_username}".lower() in text_lower if bot_username else False
     is_question = "?" in text
 
     # In private chat - always respond
-    # In group - respond to name calls, replies, or sometimes questions
+    # In group - respond to name calls, mentions, replies, or sometimes questions
     if message.chat.type == "private":
         pass  # Always respond
-    elif is_reply_to_bot or is_called:
+    elif is_reply_to_bot or is_called or is_mention:
         pass  # Respond to direct calls
     elif is_question and random.random() < 0.2:
         pass  # 20% chance on questions
     else:
+        logger.debug(f"Skipping message, no trigger found in: {text[:30]}")
         return
 
     # Register chat for check-ins

@@ -14,7 +14,7 @@ TIMEZONE = "Europe/Moscow"
 
 # Bot personality
 BOT_NAME = "Кузя"
-BOT_NAMES = ["кузя", "кузь", "kuzia", "kuzya"]
+BOT_NAMES = ["кузя", "кузь", "кузю", "кузе", "kuzia", "kuzya", "kuz"]
 
 # System prompt - informal, like a caring grandson
 SYSTEM_PROMPT = """Ты Кузя — как внук который всегда на связи. Общаешься с бабушкой и мамой.
