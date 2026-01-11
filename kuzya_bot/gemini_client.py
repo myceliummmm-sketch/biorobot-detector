@@ -5,6 +5,7 @@ Gemini client for Kuzya bot - warm family assistant
 import logging
 import google.generativeai as genai
 from config import GEMINI_API_KEY, SYSTEM_PROMPT
+from database import get_recent_messages
 
 logger = logging.getLogger(__name__)
 
@@ -25,22 +26,43 @@ class KuzyaClient:
             },
             system_instruction=SYSTEM_PROMPT
         )
-        self.chat_histories = {}
         logger.info("KuzyaClient initialized")
 
-    def _get_chat(self, chat_id: int):
-        """Get or create chat session"""
-        if chat_id not in self.chat_histories:
-            self.chat_histories[chat_id] = self.model.start_chat(history=[])
-        return self.chat_histories[chat_id]
+    def _build_context(self, chat_id: int) -> str:
+        """Build context from recent messages"""
+        messages = get_recent_messages(chat_id, limit=30)
+
+        if not messages:
+            return "нет предыдущих сообщений"
+
+        lines = []
+        for msg in messages:
+            role = msg["role"]
+            name = msg["user_name"] or "?"
+            content = msg["content"]
+
+            if role == "user":
+                lines.append(f"[{name}]: {content}")
+            else:
+                lines.append(f"[Кузя]: {content}")
+
+        return "\n".join(lines[-30:])  # Last 30 messages
 
     async def generate_response(self, chat_id: int, user_name: str, message: str) -> str:
         """Generate response to user message"""
         try:
-            chat = self._get_chat(chat_id)
+            context = self._build_context(chat_id)
 
-            prompt = f"{user_name}: {message}"
-            response = await chat.send_message_async(prompt)
+            prompt = f"""{SYSTEM_PROMPT}
+
+ИСТОРИЯ ЧАТА:
+{context}
+
+[{user_name}]: {message}
+
+Ответь кратко и по делу:"""
+
+            response = self.model.generate_content(prompt)
 
             return response.text.strip()
 
@@ -69,11 +91,6 @@ class KuzyaClient:
         except Exception as e:
             logger.error(f"Image error: {e}")
             return "Не смог разобрать фотографию, простите."
-
-    def clear_history(self, chat_id: int):
-        """Clear chat history"""
-        if chat_id in self.chat_histories:
-            del self.chat_histories[chat_id]
 
 
 # Singleton

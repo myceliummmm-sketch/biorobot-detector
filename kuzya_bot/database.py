@@ -36,6 +36,19 @@ def init_db():
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER,
+                user_name TEXT,
+                role TEXT,
+                content TEXT,
+                timestamp TEXT
+            )
+        """)
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_logs_chat_id ON chat_logs(chat_id)")
+
         conn.commit()
         conn.close()
         logger.info("Database initialized")
@@ -101,6 +114,44 @@ def remove_chat(chat_id: int):
         logger.info(f"Chat removed: {chat_id}")
     except Exception as e:
         logger.error(f"Error removing chat: {e}")
+
+
+def log_message(chat_id: int, user_name: str, role: str, content: str):
+    """Log a message to the database"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        now = datetime.utcnow().isoformat()
+
+        cursor.execute(
+            "INSERT INTO chat_logs (chat_id, user_name, role, content, timestamp) VALUES (?, ?, ?, ?, ?)",
+            (chat_id, user_name, role, content[:2000], now)
+        )
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error logging message: {e}")
+
+
+def get_recent_messages(chat_id: int, limit: int = 20) -> list:
+    """Get recent messages from a chat for context"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT user_name, role, content FROM chat_logs WHERE chat_id = ? ORDER BY id DESC LIMIT ?",
+            (chat_id, limit)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+        # Reverse to get chronological order
+        return list(reversed([dict(row) for row in rows]))
+    except Exception as e:
+        logger.error(f"Error getting messages: {e}")
+        return []
 
 
 # Initialize on import

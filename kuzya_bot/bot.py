@@ -22,7 +22,7 @@ from config import (
     TIMEZONE, CHECKIN_MESSAGES, CHECKIN_TIMES
 )
 from gemini_client import get_kuzya_client
-from database import register_chat, get_all_active_chats, remove_chat
+from database import register_chat, get_all_active_chats, remove_chat, log_message
 
 # Configure logging
 logging.basicConfig(
@@ -83,8 +83,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await asyncio.sleep(random.uniform(0.5, 1.5))
 
     try:
+        # Log user message
+        log_message(chat_id, user_name, "user", text)
+
         kuzya = get_kuzya_client()
         response = await kuzya.generate_response(chat_id, user_name, text)
+
+        # Log bot response
+        log_message(chat_id, BOT_NAME, "assistant", response)
+
         await message.reply_text(response)
         logger.info(f"Sent response: {response[:50]}...")
 
@@ -172,11 +179,15 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text("Простите, не смог расшифровать. Попробуйте записать ещё раз?")
             return
 
-        # Show typing and respond
+        # Log and respond
+        log_message(chat_id, user_name, "user", f"[голосовое] {text}")
+
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
         kuzya = get_kuzya_client()
         response = await kuzya.generate_response(chat_id, user_name, text)
+
+        log_message(chat_id, BOT_NAME, "assistant", response)
 
         # Send with transcription
         preview = text[:300] + "..." if len(text) > 300 else text
@@ -224,10 +235,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file = await context.bot.get_file(photo.file_id)
         photo_bytes = await file.download_as_bytearray()
 
+        # Log user photo
+        log_message(chat_id, user_name, "user", f"[фото] {caption}" if caption else "[фото]")
+
         kuzya = get_kuzya_client()
         response = await kuzya.generate_response_with_image(
             chat_id, user_name, caption, bytes(photo_bytes)
         )
+
+        # Log bot response
+        log_message(chat_id, BOT_NAME, "assistant", response)
 
         await message.reply_text(response)
 
@@ -255,14 +272,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📷 Смотреть фотки и рассказывать что на них\n\n"
         "Просто напиши или запиши голосовое! 😊"
     )
-
-
-async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /clear - clear conversation history"""
-    chat_id = update.message.chat_id
-    kuzya = get_kuzya_client()
-    kuzya.clear_history(chat_id)
-    await update.message.reply_text("Ой, что-то я задумался... О чём мы говорили? 😊")
 
 
 async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
@@ -297,7 +306,6 @@ def main():
     # Commands
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("clear", clear_command))
 
     # Messages
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
