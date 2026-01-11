@@ -18,7 +18,7 @@ except ImportError:
     PYTZ_AVAILABLE = False
 
 from config import (
-    KUZYA_BOT_TOKEN, BOT_NAME, BOT_NAMES,
+    KUZYA_BOT_TOKEN, BOT_NAME,
     TIMEZONE, CHECKIN_MESSAGES, CHECKIN_TIMES
 )
 from gemini_client import get_kuzya_client
@@ -49,30 +49,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"Message from {user_name}: {text[:50]}...")
 
-    # Check if should respond
-    bot_username = (await context.bot.get_me()).username
-    text_lower = text.lower()
-
-    is_reply_to_bot = (
-        message.reply_to_message and
-        message.reply_to_message.from_user and
-        message.reply_to_message.from_user.id == context.bot.id
-    )
-    is_mention = f"@{bot_username}" in text if bot_username else False
-    is_called = any(name in text_lower for name in BOT_NAMES)
-    is_question = "?" in text
-
-    # In private chat - always respond
-    # In group - respond to calls, mentions, replies, or questions
-    if message.chat.type == "private":
-        pass  # Always respond
-    elif is_reply_to_bot or is_mention or is_called:
-        pass  # Respond to direct calls
-    elif is_question and random.random() < 0.3:
-        pass  # 30% chance on questions
-    else:
-        return
-
+    # Family bot - respond to everything
     # Register chat for check-ins
     chat_title = message.chat.title if message.chat.type != "private" else user_name
     register_chat(chat_id, chat_title)
@@ -201,22 +178,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = user.first_name or "друг"
     caption = message.caption or ""
 
-    # In private chat - always respond
-    # In group - need to be called
-    bot_username = (await context.bot.get_me()).username
-    caption_lower = caption.lower()
-
-    is_reply_to_bot = (
-        message.reply_to_message and
-        message.reply_to_message.from_user and
-        message.reply_to_message.from_user.id == context.bot.id
-    )
-    is_mention = f"@{bot_username}" in caption if bot_username else False
-    is_called = any(name in caption_lower for name in BOT_NAMES)
-
-    if message.chat.type != "private" and not (is_reply_to_bot or is_mention or is_called):
-        return
-
+    # Family bot - respond to all photos
     logger.info(f"Photo from {user_name}")
 
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
