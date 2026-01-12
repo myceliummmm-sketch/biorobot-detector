@@ -49,7 +49,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"Message from {user_name}: {text[:50]}...")
 
-    # Check if should respond
+    # Check if directly called
     text_lower = text.lower()
 
     is_reply_to_bot = (
@@ -60,19 +60,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_called = any(name in text_lower for name in BOT_NAMES)
     bot_username = context.bot.username
     is_mention = f"@{bot_username}".lower() in text_lower if bot_username else False
-    is_question = "?" in text
 
-    # In private chat - always respond
-    # In group - respond to name calls, mentions, replies, or sometimes questions
-    if message.chat.type == "private":
-        pass  # Always respond
-    elif is_reply_to_bot or is_called or is_mention:
-        pass  # Respond to direct calls
-    elif is_question and random.random() < 0.2:
-        pass  # 20% chance on questions
-    else:
-        logger.debug(f"Skipping message, no trigger found in: {text[:30]}")
-        return
+    # Determine response mode
+    is_direct_call = is_reply_to_bot or is_called or is_mention
+    is_private = message.chat.type == "private"
 
     # Register chat for check-ins
     chat_title = message.chat.title if message.chat.type != "private" else user_name
@@ -102,7 +93,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if reply_photo_bytes:
             response = await kuzya.generate_response_with_image(chat_id, user_name, text, reply_photo_bytes)
         else:
-            response = await kuzya.generate_response(chat_id, user_name, text)
+            # Direct call or private = detailed, otherwise short comment
+            detailed = is_direct_call or is_private
+            response = await kuzya.generate_response(chat_id, user_name, text, detailed=detailed)
 
         # Log bot response
         log_message(chat_id, BOT_NAME, "assistant", response)
@@ -290,17 +283,26 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def daily_checkin(context: ContextTypes.DEFAULT_TYPE):
-    """Send daily check-in message to all active chats"""
+    """Send smart check-in message to all active chats"""
     active_chats = get_all_active_chats()
 
     if not active_chats:
         logger.info("No active chats for check-in")
         return
 
+    kuzya = get_kuzya_client()
+
     for chat_id in active_chats:
         try:
-            message = random.choice(CHECKIN_MESSAGES)
+            # Try to generate smart message based on history
+            message = await kuzya.generate_proactive_message(chat_id)
+
+            # Fallback to simple check-in if no history
+            if not message:
+                message = random.choice(CHECKIN_MESSAGES)
+
             await context.bot.send_message(chat_id=chat_id, text=message)
+            log_message(chat_id, BOT_NAME, "assistant", message)
             logger.info(f"Sent check-in to {chat_id}: {message[:30]}...")
         except Exception as e:
             logger.error(f"Check-in error for {chat_id}: {e}")

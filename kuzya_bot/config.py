@@ -59,6 +59,7 @@ CHECKIN_MESSAGES = [
 # Check-in times (hour, minute) in TIMEZONE
 CHECKIN_TIMES = [
     (10, 30),  # Утром
-    (18, 0),   # Вечером
+    (15, 0),   # Днём
+    (20, 30),  # Вечером
 ]
 
