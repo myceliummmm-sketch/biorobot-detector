@@ -18,6 +18,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # PostgreSQL Database URL
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+# Supabase (shared with mcards for workspace context)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+
 # Bot personality
 BOT_NAME = "Prisma"
 

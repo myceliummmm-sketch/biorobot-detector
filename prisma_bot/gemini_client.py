@@ -4,6 +4,7 @@ import re
 import google.generativeai as genai
 from config import GEMINI_API_KEY, get_system_prompt
 from database import get_recent_messages, get_memory_context, add_memory
+from supabase_client import build_workspace_context, get_workspace_by_chat_id, save_ai_message
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,11 @@ class PrismaGemini:
         logger.info("Prisma Gemini initialized")
 
     def _build_context(self, chat_id: int) -> str:
-        """Build context from recent messages and permanent memory"""
-        # Get permanent memory first
+        """Build context from recent messages, permanent memory, and workspace data"""
+        # Get workspace context from Supabase (cards, project info)
+        workspace_context = build_workspace_context(chat_id)
+
+        # Get permanent memory
         memory_context = get_memory_context(chat_id, limit=15)
 
         # Get recent messages
@@ -56,10 +60,15 @@ class PrismaGemini:
                 context_lines.append(f"[{role}]: {msg.content}")
             message_context = "\n".join(context_lines)
 
-        # Combine memory and messages
+        # Combine all context: workspace + memory + messages
+        parts = []
+        if workspace_context:
+            parts.append(workspace_context)
         if memory_context:
-            return f"{memory_context}\n\n=== ПОСЛЕДНИЕ СООБЩЕНИЯ ===\n{message_context}"
-        return message_context
+            parts.append(memory_context)
+        parts.append(f"=== ПОСЛЕДНИЕ СООБЩЕНИЯ ===\n{message_context}")
+
+        return "\n\n".join(parts)
 
     def _check_youtube_context(self, message: str) -> str:
         """Check if message is about YouTube and return stats context if needed"""
@@ -103,7 +112,7 @@ class PrismaGemini:
                 logger.debug(f"GitHub context error: {e}")
         return ""
 
-    async def generate_response(self, chat_id: int, user_name: str, message: str) -> str:
+    async def generate_response(self, chat_id: int, user_name: str, message: str, user_id: int = None) -> str:
         """Generate response with context from DB"""
         try:
             context = self._build_context(chat_id)
@@ -124,6 +133,12 @@ class PrismaGemini:
 
             response = self.model.generate_content(full_prompt)
             response_text = response.text.strip()
+
+            # Save to Supabase if workspace exists
+            workspace = get_workspace_by_chat_id(chat_id)
+            if workspace and user_id:
+                save_ai_message(workspace["id"], user_id, "prisma", "user", message)
+                save_ai_message(workspace["id"], user_id, "prisma", "assistant", response_text)
 
             # Try to auto-save important info (fire and forget)
             try:
@@ -192,7 +207,7 @@ class PrismaGemini:
         except Exception as e:
             logger.debug(f"Memory analysis failed: {e}")
 
-    async def generate_response_with_image(self, chat_id: int, user_name: str, message: str, image_bytes: bytes) -> str:
+    async def generate_response_with_image(self, chat_id: int, user_name: str, message: str, image_bytes: bytes, user_id: int = None) -> str:
         """Generate response to an image"""
         try:
             import PIL.Image
@@ -211,7 +226,15 @@ class PrismaGemini:
 проанализируй картинку и ответь в своем стиле:"""
 
             response = self.model.generate_content([prompt, image])
-            return response.text.strip()
+            response_text = response.text.strip()
+
+            # Save to Supabase if workspace exists
+            workspace = get_workspace_by_chat_id(chat_id)
+            if workspace and user_id:
+                save_ai_message(workspace["id"], user_id, "prisma", "user", f"[ФОТО] {message}")
+                save_ai_message(workspace["id"], user_id, "prisma", "assistant", response_text)
+
+            return response_text
 
         except Exception as e:
             logger.error(f"Gemini API error (image): {e}")
