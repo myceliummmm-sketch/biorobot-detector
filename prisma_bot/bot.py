@@ -104,7 +104,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         prisma = get_prisma_client()
-        response = await prisma.generate_response(chat_id, user_name, message.text)
+        response = await prisma.generate_response(chat_id, user_name, message.text, user_id=user.id)
 
         # Log bot response
         log_message(chat_id, 0, "Prisma", "assistant", response)
@@ -234,7 +234,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
         prisma = get_prisma_client()
-        response = await prisma.generate_response(chat_id, user_name, text)
+        response = await prisma.generate_response(chat_id, user_name, text, user_id=user.id)
 
         log_message(chat_id, 0, "Prisma", "assistant", response)
 
@@ -291,7 +291,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         prisma = get_prisma_client()
         response = await prisma.generate_response_with_image(
-            chat_id, user_name, caption or "что думаешь?", bytes(photo_bytes)
+            chat_id, user_name, caption or "что думаешь?", bytes(photo_bytes), user_id=user.id
         )
 
         log_message(chat_id, 0, "Prisma", "assistant", response)

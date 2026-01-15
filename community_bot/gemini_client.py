@@ -4,6 +4,13 @@ from config import (
     GEMINI_API_KEY, SYSTEM_PROMPT,
     USE_VERTEX_AI, GCP_PROJECT_ID, GCP_LOCATION
 )
+from supabase_client import (
+    get_workspace_by_chat_id,
+    get_ai_history,
+    save_ai_message,
+    build_workspace_context,
+    get_or_create_profile
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,31 +91,45 @@ class GeminiClient:
         """Get a random mood modifier"""
         return random.choice(MOODS)
 
-    async def generate_response(self, chat_id: int, user_name: str, message: str) -> str:
+    async def generate_response(self, chat_id: int, user_name: str, message: str, user_id: int = None) -> str:
         """Generate a response to a user message"""
         try:
             chat = self.get_chat(chat_id)
             mood = self._get_random_mood()
-            prompt = f"[настроение: {mood}]\n[{user_name}]: {message}"
+
+            # Get workspace context from Supabase
+            workspace_context = build_workspace_context(chat_id)
+            workspace = get_workspace_by_chat_id(chat_id)
+
+            # Build prompt with context
+            if workspace_context:
+                prompt = f"{workspace_context}\n\n[настроение: {mood}]\n[{user_name}]: {message}"
+            else:
+                prompt = f"[настроение: {mood}]\n[{user_name}]: {message}"
 
             if self.use_vertex:
-                # Vertex AI async
                 response = await chat.send_message_async(prompt)
             else:
-                # google-generativeai (sync, but works)
                 response = chat.send_message(prompt)
 
             # Keep history manageable
             if len(chat.history) > 40:
                 chat.history = chat.history[-40:]
 
-            return response.text.strip()
+            response_text = response.text.strip()
+
+            # Save to Supabase if workspace exists
+            if workspace and user_id:
+                save_ai_message(workspace["id"], user_id, "toxic", "user", message)
+                save_ai_message(workspace["id"], user_id, "toxic", "assistant", response_text)
+
+            return response_text
 
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
             return self._get_fallback_response()
 
-    async def generate_response_with_image(self, chat_id: int, user_name: str, message: str, image_bytes: bytes) -> str:
+    async def generate_response_with_image(self, chat_id: int, user_name: str, message: str, image_bytes: bytes, user_id: int = None) -> str:
         """Generate a response to an image with optional text"""
         try:
             import PIL.Image
@@ -117,12 +138,23 @@ class GeminiClient:
             # Convert bytes to PIL Image
             image = PIL.Image.open(io.BytesIO(image_bytes))
 
-            prompt = f"[{user_name}] прислал фото и написал: {message}"
+            # Get workspace context
+            workspace_context = build_workspace_context(chat_id)
+            workspace = get_workspace_by_chat_id(chat_id)
+
+            prompt = f"{workspace_context}\n\n[{user_name}] прислал фото и написал: {message}" if workspace_context else f"[{user_name}] прислал фото и написал: {message}"
 
             # Generate response with image (use model directly, not chat for multimodal)
             response = self.model.generate_content([prompt, image])
 
-            return response.text.strip()
+            response_text = response.text.strip()
+
+            # Save to Supabase if workspace exists
+            if workspace and user_id:
+                save_ai_message(workspace["id"], user_id, "toxic", "user", f"[ФОТО] {message}")
+                save_ai_message(workspace["id"], user_id, "toxic", "assistant", response_text)
+
+            return response_text
 
         except Exception as e:
             logger.error(f"Gemini API error (image): {e}")

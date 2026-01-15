@@ -159,7 +159,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         gemini = get_gemini_client()
         user_name = user.first_name or user.username or "Аноним"
-        response = await gemini.generate_response(chat_id, user_name, message.text)
+        response = await gemini.generate_response(chat_id, user_name, message.text, user_id=user.id)
 
         # Send response
         await message.reply_text(response)
@@ -220,7 +220,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Generate response with image
         response = await gemini.generate_response_with_image(
-            chat_id, user_name, caption or "что скажешь про это фото?", bytes(photo_bytes)
+            chat_id, user_name, caption or "что скажешь про это фото?", bytes(photo_bytes), user_id=user.id
         )
 
         await message.reply_text(response)
