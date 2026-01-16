@@ -1,0 +1,7 @@
+python-telegram-bot[job-queue]>=21.3
+google-generativeai>=0.8.0
+google-genai>=1.0.0
+python-dotenv>=1.0.0
+Pillow>=10.0.0
+pytz>=2023.3
+supabase>=2.0.0
