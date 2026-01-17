@@ -96,13 +96,40 @@ def get_or_create_profile(telegram_id: int, username: str = None, first_name: st
         new_profile = client.table("profiles").insert({
             "telegram_id": telegram_id,
             "telegram_username": username,
-            "username": first_name or f"user_{telegram_id}"
+            "username": first_name or f"user_{telegram_id}",
+            "spores_balance": 0,
+            "xp": 0
         }).execute()
 
         return new_profile.data[0]["id"] if new_profile.data else None
     except Exception as e:
         logger.error(f"Error with profile: {e}")
         return None
+
+
+def get_user_balance(telegram_id: int) -> Dict:
+    """Get user's spores balance and XP from profiles table"""
+    client = get_supabase()
+    if not client:
+        return {"spores_balance": 0, "xp": 0, "error": "Supabase not configured"}
+    try:
+        result = client.table("profiles")\
+            .select("spores_balance, xp, username")\
+            .eq("telegram_id", telegram_id)\
+            .execute()
+
+        if result.data:
+            return {
+                "spores_balance": result.data[0].get("spores_balance", 0) or 0,
+                "xp": result.data[0].get("xp", 0) or 0,
+                "username": result.data[0].get("username", ""),
+                "exists": True
+            }
+        else:
+            return {"spores_balance": 0, "xp": 0, "exists": False}
+    except Exception as e:
+        logger.error(f"Error getting balance: {e}")
+        return {"spores_balance": 0, "xp": 0, "error": str(e)}
 
 
 def build_workspace_context(chat_id: int) -> str:

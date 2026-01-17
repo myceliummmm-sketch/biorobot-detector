@@ -243,7 +243,10 @@ CHECKIN_PROMPTS = {
 
 # GitHub settings
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-GITHUB_REPO = os.getenv("GITHUB_REPO", "myceliummmm-sketch/mcards")
+GITHUB_REPOS = [
+    "myceliummmm-sketch/mcards",
+    "myceliummmm-sketch/mycelium-card-gabil",
+]
 
 # Admin settings (only this user can change prompt)
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "diischz")
