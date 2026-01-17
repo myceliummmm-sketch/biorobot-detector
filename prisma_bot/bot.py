@@ -309,6 +309,47 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /balance - Show user's Spores balance and earning rules (UC-50)"""
+    from supabase_client import get_user_balance, get_or_create_profile
+
+    user = update.effective_user
+    telegram_id = user.id
+    user_name = user.first_name or user.username or "stranger"
+
+    # Ensure profile exists
+    get_or_create_profile(telegram_id, user.username, user_name)
+
+    # Get balance
+    balance_data = get_user_balance(telegram_id)
+
+    spores = balance_data.get("spores_balance", 0)
+    xp = balance_data.get("xp", 0)
+
+    # Format response with economy rules
+    response = f"""🍄 **Spores Balance**
+
+**{user_name}**, твой баланс:
+▸ 🌿 Spores: **{spores}**
+▸ ⚡ XP: **{xp}**
+
+━━━━━━━━━━━━━━━━━━━━
+
+💰 **Как заработать:**
+• Epic Card → +10 Spores
+• Legendary Card → +25 Spores
+• Phase Completion → +20 Spores
+
+💸 **Расходы:**
+• Reforge (исправление) → -10 Spores
+• Auto-fill ("I don't know") → -10 Spores
+
+━━━━━━━━━━━━━━━━━━━━
+_Evaluate → Forge → Earn_"""
+
+    await update.message.reply_text(response, parse_mode="Markdown")
+
+
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status"""
     chat_id = update.message.chat_id
@@ -790,6 +831,7 @@ def main():
 
     # Add handlers
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("balance", balance_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("mute", mute_command))
     app.add_handler(CommandHandler("prompt", prompt_command))
