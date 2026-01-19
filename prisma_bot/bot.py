@@ -2,8 +2,8 @@ import logging
 import random
 import asyncio
 from datetime import datetime, time
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 try:
     import pytz
@@ -44,6 +44,8 @@ from gemini_client import get_prisma_client
 from google_docs_client import get_docs_client
 from github_client import get_github_client
 from youtube_client import get_youtube_client
+from services.dialog_engine import get_dialog_engine
+from supabase_client import get_supabase
 
 # Configure logging
 logging.basicConfig(
@@ -61,12 +63,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = message.chat_id
     user = message.from_user
+    thread_id = message.message_thread_id
 
     # Skip bots
     if user.is_bot:
         return
 
     user_name = user.first_name or user.username or "аноним"
+
+    # === DIALOG ENGINE ROUTING ===
+    # Check if this message is in an #idea topic that DialogEngine should handle
+    if thread_id:
+        try:
+            supabase = get_supabase()
+            if supabase:
+                engine = get_dialog_engine(supabase)
+                project_id = engine.get_project_by_chat(chat_id)
+
+                if project_id and engine.should_handle_message(project_id, thread_id):
+                    # DialogEngine handles this message
+                    logger.info(f"DialogEngine handling message in #idea topic")
+
+                    response, keyboard_data = engine.process_message(
+                        project_id=project_id,
+                        user_message=message.text,
+                        user_name=user_name
+                    )
+
+                    reply_markup = None
+                    if keyboard_data:
+                        reply_markup = InlineKeyboardMarkup(keyboard_data["inline_keyboard"])
+
+                    await message.reply_text(
+                        response,
+                        parse_mode="Markdown",
+                        reply_markup=reply_markup
+                    )
+                    return  # DialogEngine handled it, stop here
+
+        except Exception as e:
+            logger.error(f"DialogEngine error: {e}")
+            # Continue with normal handling if DialogEngine fails
 
     # Log message to DB
     log_message(chat_id, user.id, user_name, "user", message.text)
@@ -348,6 +385,133 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 _Evaluate → Forge → Earn_"""
 
     await update.message.reply_text(response, parse_mode="Markdown")
+
+
+async def startidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /startidea - Start the IDEA phase questionnaire"""
+    message = update.message
+    chat_id = message.chat_id
+
+    supabase = get_supabase()
+    if not supabase:
+        await message.reply_text("❌ База данных не подключена.")
+        return
+
+    engine = get_dialog_engine(supabase)
+
+    # Get project
+    project_id = engine.get_project_by_chat(chat_id)
+    if not project_id:
+        await message.reply_text(
+            "❌ Проект не найден.\n\n"
+            "Сначала создай воркспейс через веб-приложение и привяжи к этому чату."
+        )
+        return
+
+    # Start dialog
+    success, first_question = engine.start_dialog(project_id)
+
+    if success:
+        await message.reply_text(
+            f"🚀 **Запускаем фазу IDEA!**\n\n"
+            f"Сейчас заполним 5 карточек:\n"
+            f"1. 🎯 Product\n"
+            f"2. 🔥 Problem\n"
+            f"3. 👥 Audience\n"
+            f"4. 💎 Value\n"
+            f"5. 🚀 Vision\n\n"
+            f"Пиши ответы в топик **#idea**!\n\n{first_question}",
+            parse_mode="Markdown"
+        )
+    else:
+        await message.reply_text("❌ Ошибка при запуске. Попробуй позже.")
+
+
+async def ideaprogress_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /ideaprogress - Show current progress in IDEA phase"""
+    message = update.message
+    chat_id = message.chat_id
+
+    supabase = get_supabase()
+    if not supabase:
+        await message.reply_text("❌ База данных не подключена.")
+        return
+
+    engine = get_dialog_engine(supabase)
+    project_id = engine.get_project_by_chat(chat_id)
+
+    if not project_id:
+        await message.reply_text("❌ Проект не найден.")
+        return
+
+    progress = engine.get_progress(project_id)
+
+    if not progress.get("started"):
+        await message.reply_text(
+            "Фаза IDEA ещё не начата.\n\n"
+            "Используй /startidea чтобы начать."
+        )
+        return
+
+    cards_done = progress["cards_completed"]
+    current = progress["current_card"].title()
+    question = progress["current_question"]
+    percent = progress["progress_percent"]
+
+    bar = "●" * cards_done + "○" * (5 - cards_done)
+
+    await message.reply_text(
+        f"📊 **Прогресс IDEA**\n\n"
+        f"[{bar}] {cards_done}/5 карт\n\n"
+        f"Текущая карта: **{current}**\n"
+        f"Вопрос: {question}/5\n\n"
+        f"Общий прогресс: {percent}%",
+        parse_mode="Markdown"
+    )
+
+
+async def handle_dialog_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle callback button presses from DialogEngine"""
+    query = update.callback_query
+    if not query or not query.data:
+        return
+
+    data = query.data
+
+    # Check if this is a dialog callback
+    if not data.startswith(("confirm_card:", "redo_card:")):
+        return
+
+    await query.answer()
+
+    supabase = get_supabase()
+    if not supabase:
+        await query.edit_message_text("❌ База данных не подключена.")
+        return
+
+    engine = get_dialog_engine(supabase)
+
+    if data.startswith("confirm_card:"):
+        project_id = data.split(":")[1]
+        response, keyboard_data = engine.confirm_card(project_id)
+
+    elif data.startswith("redo_card:"):
+        project_id = data.split(":")[1]
+        response, keyboard_data = engine.redo_card(project_id)
+
+    else:
+        return
+
+    # Edit message with response
+    reply_markup = None
+    if keyboard_data:
+        reply_markup = InlineKeyboardMarkup(keyboard_data["inline_keyboard"])
+
+    await query.edit_message_text(
+        response,
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
 
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -832,6 +996,8 @@ def main():
     # Add handlers
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("balance", balance_command))
+    app.add_handler(CommandHandler("startidea", startidea_command))
+    app.add_handler(CommandHandler("ideaprogress", ideaprogress_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("mute", mute_command))
     app.add_handler(CommandHandler("prompt", prompt_command))
@@ -839,6 +1005,9 @@ def main():
     app.add_handler(CommandHandler("youtube", youtube_command))
     app.add_handler(CommandHandler("upload", upload_command))
     app.add_handler(CommandHandler("github", github_command))
+
+    # Callback handlers for inline buttons
+    app.add_handler(CallbackQueryHandler(handle_dialog_callback))
 
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
