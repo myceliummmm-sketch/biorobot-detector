@@ -112,7 +112,7 @@ class DialogEngine:
         try:
             result = self.supabase.table("projects")\
                 .select("id")\
-                .eq("telegram_chat_id", chat_id)\
+                .eq("telegram_group_id", chat_id)\
                 .execute()
 
             return result.data[0]["id"] if result.data else None
