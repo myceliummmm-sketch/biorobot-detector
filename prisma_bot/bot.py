@@ -2,8 +2,8 @@ import logging
 import random
 import asyncio
 from datetime import datetime, time
-from telegram import Update, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram import Update, InlineKeyboardMarkup, ChatMemberUpdated
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ChatMemberHandler, filters, ContextTypes
 
 try:
     import pytz
@@ -53,6 +53,110 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+
+# ==================== TOPIC DETECTION ====================
+
+# Topic names that Prisma recognizes (case-insensitive)
+TOPIC_MAPPING = {
+    "idea": "idea_thread_id",
+    "идея": "idea_thread_id",
+    "#idea": "idea_thread_id",
+    "#идея": "idea_thread_id",
+    "research": "research_thread_id",
+    "рисерч": "research_thread_id",
+    "#research": "research_thread_id",
+    "build": "build_thread_id",
+    "билд": "build_thread_id",
+    "#build": "build_thread_id",
+    "grow": "grow_thread_id",
+    "гроу": "grow_thread_id",
+    "#grow": "grow_thread_id",
+    "general": "general_thread_id",
+    "#general": "general_thread_id",
+}
+
+
+async def detect_topic_by_name(context: ContextTypes.DEFAULT_TYPE, chat_id: int, thread_id: int) -> str:
+    """
+    Detect topic type by fetching forum topic name.
+    Returns: topic type key (idea/research/build/grow/general) or None
+    """
+    if not thread_id:
+        return None
+
+    try:
+        # Try to get topic info - Note: this may not work in all cases
+        # Telegram Bot API doesn't provide direct forum topic info
+        # We rely on the stored mapping in database
+        return None
+    except Exception as e:
+        logger.debug(f"Could not detect topic name: {e}")
+        return None
+
+
+def is_idea_topic_by_name(topic_name: str) -> bool:
+    """Check if topic name indicates it's an #idea topic"""
+    if not topic_name:
+        return False
+    name_lower = topic_name.lower().strip()
+    return name_lower in ["idea", "идея", "#idea", "#идея", "💡 idea", "💡 идея"]
+
+
+# ==================== WELCOME MESSAGE ====================
+
+WELCOME_MESSAGE = """💎 Привет! Я Prisma — твой продакт-менеджер.
+
+Моя работа — помочь тебе понять, что ты строишь и для кого. Буду вести через карточки, задавать вопросы и держать фокус на важном.
+
+📍 **Как работаем:**
+▸ Пиши в топик **#idea** — там я проведу тебя через 5 карточек
+▸ Можешь отвечать голосом — я расшифрую
+▸ На каждый вопрос предложу варианты A/B/C/D
+
+🎴 **Фаза IDEA — 5 карт:**
+1. 🎯 Продукт — что создаёшь?
+2. 🔥 Проблема — чью боль решаешь?
+3. 👥 Аудитория — кто твой человек?
+4. 💎 Ценность — в чём выгода?
+5. 🔮 Видение — куда это ведёт?
+
+Готов? Напиши что-нибудь в **#idea** и начнём! 💎"""
+
+
+async def handle_new_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle when bot is added to a chat - send welcome to #General if topics enabled"""
+    chat_member = update.my_chat_member
+    if not chat_member:
+        return
+
+    new_member = chat_member.new_chat_member
+    old_member = chat_member.old_chat_member
+
+    # Check if the bot was added (status changed from restricted/left/kicked to member/admin)
+    was_not_member = old_member.status in ["left", "kicked", "restricted"]
+    is_now_member = new_member.status in ["member", "administrator"]
+
+    if not (was_not_member and is_now_member):
+        return
+
+    chat = chat_member.chat
+    chat_id = chat.id
+
+    logger.info(f"Bot added to chat {chat_id}: {chat.title}")
+
+    # Check if it's a supergroup with topics
+    if chat.type == "supergroup":
+        try:
+            # Try to send welcome to the main chat (General topic has thread_id = None or 0)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=WELCOME_MESSAGE,
+                parse_mode="Markdown"
+            )
+            logger.info(f"Sent welcome message to {chat_id}")
+        except Exception as e:
+            logger.error(f"Failed to send welcome: {e}")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1008,6 +1112,12 @@ def main():
 
     # Callback handlers for inline buttons
     app.add_handler(CallbackQueryHandler(handle_dialog_callback))
+
+    # Handler for when bot is added to a group (welcome message)
+    app.add_handler(ChatMemberHandler(
+        handle_new_chat_member,
+        ChatMemberHandler.MY_CHAT_MEMBER
+    ))
 
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,

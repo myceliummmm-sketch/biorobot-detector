@@ -16,7 +16,9 @@ from data.questions import (
     get_next_card,
     format_question_message,
     parse_option_answer,
-    get_card_summary
+    get_card_summary,
+    get_card_completion_message,
+    get_team_voting
 )
 
 logger = logging.getLogger(__name__)
@@ -66,13 +68,14 @@ class DialogEngine:
 
     # ==================== ROUTING ====================
 
-    def should_handle_message(self, project_id: str, thread_id: int) -> bool:
+    def should_handle_message(self, project_id: str, thread_id: int, topic_name: str = None) -> bool:
         """
         Check if this message should be handled by DialogEngine.
 
         Args:
             project_id: Project/workspace ID
             thread_id: Telegram message_thread_id
+            topic_name: Optional topic name if available
 
         Returns:
             True if this is the #idea topic for this project
@@ -82,21 +85,64 @@ class DialogEngine:
 
         try:
             # Get project topics from database
-            result = self.supabase.table("projects")\
-                .select("topics")\
+            result = self.supabase.table("decks")\
+                .select("topics, current_phase")\
                 .eq("id", project_id)\
                 .execute()
 
             if not result.data:
                 return False
 
-            topics = result.data[0].get("topics", {})
+            topics = result.data[0].get("topics") or {}
             idea_thread_id = topics.get("idea_thread_id")
 
-            return idea_thread_id == thread_id
+            # If idea_thread_id is stored and matches - handle it
+            if idea_thread_id and idea_thread_id == thread_id:
+                return True
+
+            # If no idea_thread_id stored yet but we have topic_name, check it
+            if topic_name:
+                name_lower = topic_name.lower().strip()
+                if name_lower in ["idea", "идея", "#idea", "#идея", "💡 idea", "💡 идея"]:
+                    # Store this thread_id for future
+                    self._store_topic_thread_id(project_id, "idea_thread_id", thread_id)
+                    return True
+
+            return False
 
         except Exception as e:
             logger.error(f"Error checking topic: {e}")
+            return False
+
+    def _store_topic_thread_id(self, project_id: str, topic_key: str, thread_id: int) -> bool:
+        """Store detected topic thread_id in database"""
+        if not self.supabase:
+            return False
+
+        try:
+            # Get current topics
+            result = self.supabase.table("decks")\
+                .select("topics")\
+                .eq("id", project_id)\
+                .execute()
+
+            topics = {}
+            if result.data:
+                topics = result.data[0].get("topics") or {}
+
+            # Update with new thread_id
+            topics[topic_key] = thread_id
+
+            self.supabase.table("decks")\
+                .update({"topics": topics})\
+                .eq("id", project_id)\
+                .execute()
+
+            logger.info(f"Stored {topic_key}={thread_id} for project {project_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error storing topic thread_id: {e}")
             return False
 
     def get_project_by_chat(self, chat_id: int) -> Optional[str]:
@@ -113,9 +159,9 @@ class DialogEngine:
             return None
 
         try:
-            result = self.supabase.table("projects")\
+            result = self.supabase.table("decks")\
                 .select("id")\
-                .eq("telegram_chat_id", chat_id)\
+                .eq("telegram_group_id", chat_id)\
                 .execute()
 
             return result.data[0]["id"] if result.data else None
@@ -385,11 +431,18 @@ class DialogEngine:
         if not context:
             return "Диалог не найден. Начни заново с /start", None
 
+        # Remember completed card for voting
+        completed_card = context.current_card
+        completed_answers = context.draft_answers.copy()
+
         # Save card to database
         self._save_card_to_db(context)
 
+        # Get team voting for completed card
+        voting = get_team_voting(completed_card, "high")
+
         # Get next card
-        next_card = get_next_card(context.current_card)
+        next_card = get_next_card(completed_card)
 
         if next_card:
             # Move to next card
@@ -400,19 +453,53 @@ class DialogEngine:
             self.save_dialog_state(context)
 
             next_question = format_question_message(next_card, 1)
-            card_info = get_card_questions(context.current_card)
+            card_info = get_card_questions(completed_card)
+            emoji = card_info["emoji"] if card_info else "🎴"
+            title = card_info["title"] if card_info else completed_card
 
             cards_done = IDEA_CARDS_ORDER.index(next_card)
             progress = f"[{'●' * cards_done}{'○' * (5 - cards_done)}]"
 
-            return f"✅ Карточка сохранена!\n\n{progress} {cards_done}/5 карт\n\n{next_question}", None
+            response = f"🎴 *Карточка {title} скована!*\n\n{voting}\n\n+15 XP\n\n━━━━━━━━━━━━━━━━━━━━\n\n{progress} {cards_done}/5 карт\n\n{next_question}"
+
+            return response, None
 
         else:
             # All cards done!
             context.state = DialogState.COMPLETED
             self.save_dialog_state(context)
 
-            return "🎉 **Поздравляю!** Фаза IDEA завершена!\n\nВсе 5 карточек заполнены. Теперь можно переходить к фазе Research.\n\n+20 Spores за завершение фазы! 🌿", None
+            # Epic celebration for phase completion
+            celebration = """🎉 *ФАЗА IDEA ЗАВЕРШЕНА!*
+
+*Твоя колода:*
+🎯 Продукт — ✨ RARE
+🔥 Проблема — 💎 EPIC
+👥 Аудитория — 💎 EPIC
+💎 Ценность — ✨ RARE
+🔮 Видение — 🌟 LEGENDARY
+
+*Голоса команды:*
+🌲 Ever: Сильный фундамент. Идея ясная, позиционирование уникальное.
+☢️ Toxic: Неплохо. Но это слова. Посмотрим как рынок отреагирует.
+🔥 Phoenix: Отличная персона. Можно работать.
+🎨 Virgil: Продаваемая история.
+🧘 Zen: Хорошо поработал. Отдохни перед следующей фазой.
+
+━━━━━━━━━━━━━━━━━━━━
+
+*Награды:*
+✅ +460 XP (включая бонусы)
+✅ 5 карточек в колоде
+✅ +20 Spores за завершение фазы 🌿
+✅ Website Prompt — после Research
+
+💎 *Prisma:* Ты прошёл первую фазу! Есть идея — структурированная и ясная.
+Но мы не знаем: есть ли рынок? Кто конкуренты? Какие риски?
+
+В фазе *RESEARCH* AI поищет в интернете и соберёт отчёт."""
+
+            return celebration, None
 
     def redo_card(self, project_id: str) -> Tuple[str, Optional[Dict]]:
         """
