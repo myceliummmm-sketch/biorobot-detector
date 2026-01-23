@@ -14,7 +14,9 @@ from data.questions import (
     get_card_questions,
     get_question,
     get_next_card,
-    format_question_message
+    format_question_message,
+    parse_option_answer,
+    get_card_summary
 )
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,7 @@ class DialogState(Enum):
     """Possible states in the dialog flow"""
     IDLE = "idle"                    # Not in a dialog
     AWAITING_ANSWER = "awaiting"     # Waiting for user's answer
+    AWAITING_CUSTOM = "custom"       # User selected D) Свой вариант
     CONFIRMING = "confirming"        # Waiting for card confirmation
     COMPLETED = "completed"          # All cards done
 
@@ -255,6 +258,9 @@ class DialogEngine:
         if context.state == DialogState.AWAITING_ANSWER:
             return self._handle_answer(context, user_message)
 
+        elif context.state == DialogState.AWAITING_CUSTOM:
+            return self._handle_custom_answer(context, user_message)
+
         elif context.state == DialogState.CONFIRMING:
             return self._handle_confirmation(context, user_message)
 
@@ -265,13 +271,24 @@ class DialogEngine:
             return "Что-то пошло не так. Попробуй /restart", None
 
     def _handle_answer(self, context: DialogContext, answer: str) -> Tuple[str, Optional[Dict]]:
-        """Handle user's answer to a question"""
+        """Handle user's answer to a question with A/B/C/D option support"""
 
-        # Get current question to save the field name
+        # Get current question
         question = get_question(context.current_card, context.current_question)
-        if question:
-            # Save answer to draft
-            context.draft_answers[question["field"]] = answer.strip()
+        if not question:
+            return "Ошибка: вопрос не найден", None
+
+        # Parse answer (handles A/B/C/D options)
+        parsed_answer = parse_option_answer(answer, question)
+
+        # If user selected "D) Свой вариант" - ask for custom input
+        if parsed_answer is None:
+            context.state = DialogState.AWAITING_CUSTOM
+            self.save_dialog_state(context)
+            return "Напиши свой вариант:", None
+
+        # Save answer to draft
+        context.draft_answers[question["field"]] = parsed_answer
 
         # Check if more questions in this card
         if context.current_question < 5:
@@ -281,7 +298,7 @@ class DialogEngine:
             self.save_dialog_state(context)
 
             next_question = format_question_message(context.current_card, context.current_question)
-            return f"✓ Записал.\n\n{next_question}", None
+            return f"✓ {parsed_answer}\n\n{next_question}", None
 
         else:
             # Card complete - ask for confirmation
@@ -300,7 +317,43 @@ class DialogEngine:
             emoji = card_info["emoji"] if card_info else "📋"
             title = card_info["title"] if card_info else context.current_card
 
-            return f"✓ Записал.\n\n{emoji} **Карточка {title} готова!**\n\n{summary}\n\nФиксируем?", keyboard
+            return f"✓ {parsed_answer}\n\n{emoji} *Карточка {title} готова!*\n\n{summary}\n\nФиксируем?", keyboard
+
+    def _handle_custom_answer(self, context: DialogContext, answer: str) -> Tuple[str, Optional[Dict]]:
+        """Handle custom answer after user selected D) Свой вариант"""
+
+        question = get_question(context.current_card, context.current_question)
+        if not question:
+            return "Ошибка: вопрос не найден", None
+
+        # Save custom answer
+        context.draft_answers[question["field"]] = answer.strip()
+
+        # Continue to next question or finish card
+        if context.current_question < 5:
+            context.current_question += 1
+            context.state = DialogState.AWAITING_ANSWER
+            self.save_dialog_state(context)
+
+            next_question = format_question_message(context.current_card, context.current_question)
+            return f"✓ {answer.strip()}\n\n{next_question}", None
+        else:
+            context.state = DialogState.CONFIRMING
+            self.save_dialog_state(context)
+
+            summary = self._format_card_summary(context)
+            keyboard = {
+                "inline_keyboard": [[
+                    {"text": "✅ Фиксируем", "callback_data": f"confirm_card:{context.project_id}"},
+                    {"text": "🔄 Переделать", "callback_data": f"redo_card:{context.project_id}"}
+                ]]
+            }
+
+            card_info = get_card_questions(context.current_card)
+            emoji = card_info["emoji"] if card_info else "📋"
+            title = card_info["title"] if card_info else context.current_card
+
+            return f"✓ {answer.strip()}\n\n{emoji} *Карточка {title} готова!*\n\n{summary}\n\nФиксируем?", keyboard
 
     def _handle_confirmation(self, context: DialogContext, response: str) -> Tuple[str, Optional[Dict]]:
         """Handle confirmation response (text-based fallback)"""
