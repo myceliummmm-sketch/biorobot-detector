@@ -85,7 +85,7 @@ class DialogEngine:
 
         try:
             # Get project topics from database
-            result = self.supabase.table("decks")\
+            result = self.supabase.table("projects")\
                 .select("topics, current_phase")\
                 .eq("id", project_id)\
                 .execute()
@@ -121,7 +121,7 @@ class DialogEngine:
 
         try:
             # Get current topics
-            result = self.supabase.table("decks")\
+            result = self.supabase.table("projects")\
                 .select("topics")\
                 .eq("id", project_id)\
                 .execute()
@@ -133,7 +133,7 @@ class DialogEngine:
             # Update with new thread_id
             topics[topic_key] = thread_id
 
-            self.supabase.table("decks")\
+            self.supabase.table("projects")\
                 .update({"topics": topics})\
                 .eq("id", project_id)\
                 .execute()
@@ -159,7 +159,7 @@ class DialogEngine:
             return None
 
         try:
-            result = self.supabase.table("decks")\
+            result = self.supabase.table("projects")\
                 .select("id")\
                 .eq("telegram_group_id", chat_id)\
                 .execute()

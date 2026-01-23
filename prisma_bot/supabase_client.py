@@ -30,7 +30,7 @@ def get_workspace_by_chat_id(chat_id: int) -> Optional[Dict]:
     if not client:
         return None
     try:
-        result = client.table("decks")\
+        result = client.table("projects")\
             .select("*")\
             .eq("telegram_group_id", chat_id)\
             .execute()
