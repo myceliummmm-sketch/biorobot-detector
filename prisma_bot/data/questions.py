@@ -1,19 +1,155 @@
 """
 Questions structure for IDEA phase cards.
 Each card has questions with A/B/C/D options to reduce friction.
-Based on Prisma Character File v4.3
+Based on Prisma Character File v4.3 and IDEA_PHASE_FLOW v2.7
+
+Characters per card:
+- V-01 Product: 🌲 Ever Green + 💎 Prisma
+- V-02 Problem: ☢️ Toxic + 💎 Prisma
+- V-03 Audience: 🔥 Phoenix + 💎 Prisma
+- V-04 Value: 🌲 Ever Green + 💎 Prisma
+- V-05 Vision: 🎨 Virgil + 💎 Prisma
 """
 
 from typing import Dict, List, Optional
+import random
 
 # Card types in order for IDEA phase
 IDEA_CARDS_ORDER = ["product", "problem", "audience", "value", "vision"]
+
+# Character-specific intros for each card
+CARD_CHARACTER_INTROS = {
+    "product": {
+        "lead": "🌲 Ever",
+        "intro": "🌲 *Ever Green:* Карточка 01: Idea Seed. Зерно идеи.\n\nЗнаешь, самые великие компании начинались с одного предложения.\nAirbnb: «Сдавай свою комнату путешественникам». Uber: «Нажми кнопку — приедет машина».\n\n💎 *Prisma:* Твоя очередь! Не думай долго — скажи как есть. Отшлифуем вместе.",
+    },
+    "problem": {
+        "lead": "☢️ Toxic",
+        "intro": "☢️ *Toxic:* Привет. Давай без реверансов.\n\n«Не знают с чего начать» — это не боль. Это дискомфорт.\nБоль — когда уже попробовал и обжёгся. Потерял деньги. Запустил продукт в пустоту.\n\n💎 *Prisma:* Копнём глубже. Какую конкретную боль решает твой продукт?",
+    },
+    "audience": {
+        "lead": "🔥 Phoenix",
+        "intro": "🔥 *Phoenix:* Привет! Люблю эту часть.\n\nЗабудь «целевая аудитория 25-34». Это для отчётов.\nМне нужен *один человек*.\n\nПредставь: кофейня. За соседним столиком — твой идеальный клиент.\n\n💎 *Prisma:* Как выглядит? Что в руках? О чём думает?",
+    },
+    "value": {
+        "lead": "🌲 Ever",
+        "intro": "🌲 *Ever Green:* Время для самого важного — ценность.\n\nЕсли через 3 месяца скажешь «получилось!» — какие цифры увидишь?\n\n💎 *Prisma:* Давай честно. Что конкретно получит пользователь?",
+    },
+    "vision": {
+        "lead": "🎨 Virgil",
+        "intro": "🎨 *Virgil:* Привет. Моя любимая часть — охота за странностью.\n\nЗабудь «лучше» и «больше функций». Скучно. Копируемо.\nИщу *странность*. То, что делает тебя — тебя.\n\n💎 *Prisma:* Последняя карточка! Самая важная. Почему выберут именно тебя?",
+    },
+}
+
+# Team voting comments for card completion
+TEAM_VOTING = {
+    "product": {
+        "high": [
+            {"char": "🌲 Ever", "score": "8/10", "comment": "Сильная аналогия, понятный рынок"},
+            {"char": "🔥 Phoenix", "score": "7/10", "comment": "Хороший маркетинговый ход"},
+            {"char": "☢️ Toxic", "score": "6/10", "comment": "Посмотрим. Пока это просто слова"},
+        ],
+        "medium": [
+            {"char": "🌲 Ever", "score": "6/10", "comment": "Идея понятна, но нужна уникальность"},
+            {"char": "🔥 Phoenix", "score": "5/10", "comment": "Можно работать, но нужно отточить"},
+            {"char": "☢️ Toxic", "score": "5/10", "comment": "Пока слабо. Копнём глубже"},
+        ],
+    },
+    "problem": {
+        "high": [
+            {"char": "☢️ Toxic", "score": "8/10", "comment": "Боль реальная. Копнул глубоко"},
+            {"char": "🌲 Ever", "score": "8/10", "comment": "Сильная формулировка. Продаётся"},
+            {"char": "🔥 Phoenix", "score": "7/10", "comment": "Понятно кому продавать"},
+        ],
+        "medium": [
+            {"char": "☢️ Toxic", "score": "6/10", "comment": "Боль есть, но размытая"},
+            {"char": "🌲 Ever", "score": "5/10", "comment": "Нужно конкретнее"},
+            {"char": "🔥 Phoenix", "score": "5/10", "comment": "Пока не цепляет"},
+        ],
+    },
+    "audience": {
+        "high": [
+            {"char": "🔥 Phoenix", "score": "9/10", "comment": "Живой человек, не статистика!"},
+            {"char": "🌲 Ever", "score": "8/10", "comment": "Знаем для кого строим"},
+            {"char": "☢️ Toxic", "score": "7/10", "comment": "Проверим, существует ли он"},
+        ],
+        "medium": [
+            {"char": "🔥 Phoenix", "score": "6/10", "comment": "Персона есть, но абстрактная"},
+            {"char": "🌲 Ever", "score": "5/10", "comment": "Нужно больше деталей"},
+            {"char": "☢️ Toxic", "score": "5/10", "comment": "Слишком generic"},
+        ],
+    },
+    "value": {
+        "high": [
+            {"char": "🌲 Ever", "score": "8/10", "comment": "Реалистичные цели"},
+            {"char": "☢️ Toxic", "score": "7/10", "comment": "Посмотрим через 90 дней"},
+            {"char": "🔥 Phoenix", "score": "7/10", "comment": "Понятная воронка"},
+        ],
+        "medium": [
+            {"char": "🌲 Ever", "score": "5/10", "comment": "Метрики размытые"},
+            {"char": "☢️ Toxic", "score": "5/10", "comment": "Как измерить-то?"},
+            {"char": "🔥 Phoenix", "score": "5/10", "comment": "Нужна конкретика"},
+        ],
+    },
+    "vision": {
+        "high": [
+            {"char": "🎨 Virgil", "score": "9/10", "comment": "Это история, которую хочется рассказать"},
+            {"char": "🌲 Ever", "score": "9/10", "comment": "Сильное позиционирование"},
+            {"char": "🔥 Phoenix", "score": "9/10", "comment": "Продаваемая уникальность"},
+            {"char": "☢️ Toxic", "score": "8/10", "comment": "Посмотрим, купят ли"},
+        ],
+        "medium": [
+            {"char": "🎨 Virgil", "score": "6/10", "comment": "Идея есть, но не цепляет"},
+            {"char": "🌲 Ever", "score": "5/10", "comment": "Нужна уникальность"},
+            {"char": "🔥 Phoenix", "score": "5/10", "comment": "Пока не вижу историю"},
+        ],
+    },
+}
+
+
+def get_team_voting(card_type: str, quality: str = "medium") -> str:
+    """Generate team voting comments for card completion"""
+    voting = TEAM_VOTING.get(card_type, {}).get(quality, [])
+    if not voting:
+        return ""
+
+    lines = ["*Голосование команды:*\n"]
+    total_score = 0
+
+    for vote in voting:
+        lines.append(f"{vote['char']}: {vote['score']} — «{vote['comment']}»")
+        score_num = int(vote['score'].split('/')[0])
+        total_score += score_num
+
+    avg_score = total_score / len(voting) if voting else 0
+
+    # Determine rarity
+    if avg_score >= 8.5:
+        rarity = "🌟 LEGENDARY"
+    elif avg_score >= 7.5:
+        rarity = "💎 EPIC"
+    elif avg_score >= 6:
+        rarity = "✨ RARE"
+    else:
+        rarity = "💚 COMMON"
+
+    lines.append(f"\n*Итого: {avg_score:.1f}/10 — {rarity}*")
+
+    return "\n".join(lines)
+
+
+def get_card_intro(card_type: str) -> str:
+    """Get character-specific intro for a card"""
+    card_data = CARD_CHARACTER_INTROS.get(card_type, {})
+    return card_data.get("intro", "")
+
 
 # Questions for each card type with A/B/C/D options
 IDEA_QUESTIONS: Dict[str, Dict] = {
     "product": {
         "title": "Продукт",
         "emoji": "🎯",
+        "lead_char": "🌲 Ever",
         "intro": "Начнём с главного. Что ты создаёшь?",
         "questions": [
             {
@@ -65,6 +201,7 @@ IDEA_QUESTIONS: Dict[str, Dict] = {
     "problem": {
         "title": "Проблема",
         "emoji": "🔥",
+        "lead_char": "☢️ Toxic",
         "intro": "Теперь про боль. Какую проблему ты решаешь?",
         "questions": [
             {
@@ -128,6 +265,7 @@ IDEA_QUESTIONS: Dict[str, Dict] = {
     "audience": {
         "title": "Аудитория",
         "emoji": "👥",
+        "lead_char": "🔥 Phoenix",
         "intro": "Давай познакомимся с твоим пользователем.",
         "questions": [
             {
@@ -183,6 +321,7 @@ IDEA_QUESTIONS: Dict[str, Dict] = {
     "value": {
         "title": "Ценность",
         "emoji": "💎",
+        "lead_char": "🌲 Ever",
         "intro": "В чём ценность? Почему выберут именно тебя?",
         "questions": [
             {
@@ -242,6 +381,7 @@ IDEA_QUESTIONS: Dict[str, Dict] = {
     "vision": {
         "title": "Видение",
         "emoji": "🔮",
+        "lead_char": "🎨 Virgil",
         "intro": "Куда всё это ведёт? Какая большая картина?",
         "questions": [
             {
@@ -323,7 +463,7 @@ def get_next_card(current_card: str) -> Optional[str]:
     return None
 
 
-def format_question_message(card_type: str, question_number: int) -> Optional[str]:
+def format_question_message(card_type: str, question_number: int, use_character_intro: bool = True) -> Optional[str]:
     """Format a question for sending to user with A/B/C/D options"""
     card = get_card_questions(card_type)
     question = get_question(card_type, question_number)
@@ -334,9 +474,13 @@ def format_question_message(card_type: str, question_number: int) -> Optional[st
     # Build message
     header = f"{card['emoji']} *{card['title']}* ({question_number}/5)"
 
-    # First question includes card intro
-    if question_number == 1:
-        text = f"{header}\n\n{card['intro']}\n\n*Вопрос {question_number}:* {question['text']}"
+    # First question includes character-specific intro
+    if question_number == 1 and use_character_intro:
+        char_intro = get_card_intro(card_type)
+        if char_intro:
+            text = f"{header}\n\n{char_intro}\n\n*Вопрос {question_number}:* {question['text']}"
+        else:
+            text = f"{header}\n\n{card['intro']}\n\n*Вопрос {question_number}:* {question['text']}"
     else:
         text = f"{header}\n\n*Вопрос {question_number}:* {question['text']}"
 
@@ -383,5 +527,41 @@ def get_card_summary(card_type: str, answers: Dict) -> str:
         field = q["field"]
         answer = answers.get(field, "—")
         lines.append(f"▸ {q['text'][:30]}... → {answer[:50]}")
+
+    return "\n".join(lines)
+
+
+def get_card_completion_message(card_type: str, answers: Dict, quality: str = "medium") -> str:
+    """
+    Generate full card completion message with team voting.
+
+    Args:
+        card_type: Type of card (product, problem, etc.)
+        answers: User's answers
+        quality: 'high' or 'medium' for voting comments
+
+    Returns:
+        Formatted completion message with team voting
+    """
+    card = get_card_questions(card_type)
+    if not card:
+        return "Карточка готова!"
+
+    # Card summary
+    lines = [f"{card['emoji']} *Карточка {card['title']} готова!*\n"]
+
+    for q in card["questions"]:
+        field = q["field"]
+        answer = answers.get(field, "—")
+        if len(answer) > 60:
+            answer = answer[:60] + "..."
+        lines.append(f"▸ _{answer}_")
+
+    lines.append("")
+
+    # Team voting
+    voting = get_team_voting(card_type, quality)
+    if voting:
+        lines.append(voting)
 
     return "\n".join(lines)

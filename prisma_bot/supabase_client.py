@@ -25,12 +25,12 @@ def get_supabase():
 
 
 def get_workspace_by_chat_id(chat_id: int) -> Optional[Dict]:
-    """Get workspace from Supabase by Telegram group ID"""
+    """Get workspace/deck from Supabase by Telegram group ID"""
     client = get_supabase()
     if not client:
         return None
     try:
-        result = client.table("workspaces")\
+        result = client.table("decks")\
             .select("*")\
             .eq("telegram_group_id", chat_id)\
             .execute()
@@ -41,14 +41,14 @@ def get_workspace_by_chat_id(chat_id: int) -> Optional[Dict]:
 
 
 def get_workspace_cards(workspace_id: str) -> List[Dict]:
-    """Get all cards for a workspace"""
+    """Get all cards for a workspace/deck"""
     client = get_supabase()
     if not client:
         return []
     try:
         result = client.table("cards")\
             .select("*")\
-            .eq("workspace_id", workspace_id)\
+            .eq("project_id", workspace_id)\
             .order("slot")\
             .execute()
         return result.data or []
@@ -69,7 +69,7 @@ def save_ai_message(workspace_id: str, user_id: int, agent: str, role: str, cont
             return
 
         client.table("ai_conversations").insert({
-            "workspace_id": workspace_id,
+            "project_id": workspace_id,
             "user_id": profile_id,
             "agent": agent,
             "role": role,
