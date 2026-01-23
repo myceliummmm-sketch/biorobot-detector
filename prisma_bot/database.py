@@ -114,15 +114,22 @@ def update_last_message_time(chat_id: int):
     """Update the last message timestamp for a chat"""
     try:
         session = get_session()
-        settings = session.query(BotSettings).filter(
-            BotSettings.chat_id == chat_id
-        ).first()
+        from sqlalchemy import text
+        now = datetime.utcnow()
 
-        if settings:
-            settings.last_message_at = datetime.utcnow()
-        else:
-            settings = BotSettings(chat_id=chat_id, last_message_at=datetime.utcnow())
-            session.add(settings)
+        # Try upsert with raw SQL to avoid ORM issues with missing columns
+        # First try update
+        result = session.execute(
+            text("UPDATE bot_settings SET last_message_at = :now WHERE chat_id = :chat_id"),
+            {"now": now, "chat_id": chat_id}
+        )
+
+        if result.rowcount == 0:
+            # Insert if not exists
+            session.execute(
+                text("INSERT INTO bot_settings (chat_id, last_message_at) VALUES (:chat_id, :now)"),
+                {"chat_id": chat_id, "now": now}
+            )
 
         session.commit()
         session.close()
@@ -134,13 +141,16 @@ def get_silence_duration(chat_id: int) -> float:
     """Get hours since last message in chat"""
     try:
         session = get_session()
-        settings = session.query(BotSettings).filter(
-            BotSettings.chat_id == chat_id
-        ).first()
+        from sqlalchemy import text
+        result = session.execute(
+            text("SELECT last_message_at FROM bot_settings WHERE chat_id = :chat_id LIMIT 1"),
+            {"chat_id": chat_id}
+        )
+        row = result.fetchone()
         session.close()
 
-        if settings and settings.last_message_at:
-            delta = datetime.utcnow() - settings.last_message_at
+        if row and row[0]:
+            delta = datetime.utcnow() - row[0]
             return delta.total_seconds() / 3600  # Return hours
         return 0
     except Exception as e:
@@ -152,13 +162,12 @@ def update_last_kick_time(chat_id: int):
     """Update when we last kicked the chat"""
     try:
         session = get_session()
-        settings = session.query(BotSettings).filter(
-            BotSettings.chat_id == chat_id
-        ).first()
-
-        if settings:
-            settings.last_kick_at = datetime.utcnow()
-            session.commit()
+        from sqlalchemy import text
+        session.execute(
+            text("UPDATE bot_settings SET last_kick_at = :now WHERE chat_id = :chat_id"),
+            {"now": datetime.utcnow(), "chat_id": chat_id}
+        )
+        session.commit()
         session.close()
     except Exception as e:
         logger.error(f"Error updating last kick time: {e}")
@@ -168,9 +177,12 @@ def get_all_active_chats() -> list:
     """Get all chats with settings"""
     try:
         session = get_session()
-        settings = session.query(BotSettings).all()
+        # Only select columns that definitely exist
+        from sqlalchemy import text
+        result = session.execute(text("SELECT chat_id FROM bot_settings"))
+        chats = [row[0] for row in result]
         session.close()
-        return [s.chat_id for s in settings]
+        return chats
     except Exception as e:
         logger.error(f"Error getting active chats: {e}")
         return []
@@ -285,13 +297,17 @@ def is_chat_muted(chat_id: int) -> bool:
     """Check if chat is muted"""
     try:
         session = get_session()
-        settings = session.query(BotSettings).filter(
-            BotSettings.chat_id == chat_id
-        ).first()
+        from sqlalchemy import text
+        result = session.execute(
+            text("SELECT is_muted FROM bot_settings WHERE chat_id = :chat_id LIMIT 1"),
+            {"chat_id": chat_id}
+        )
+        row = result.fetchone()
         session.close()
-        return settings.is_muted == 1 if settings else False
+        return row[0] == 1 if row else False
     except Exception as e:
-        logger.error(f"Error checking mute status: {e}")
+        # Column might not exist - return False (not muted)
+        logger.debug(f"is_chat_muted fallback (column may not exist): {e}")
         return False
 
 
@@ -299,20 +315,16 @@ def set_chat_muted(chat_id: int, muted: bool) -> bool:
     """Set chat mute status"""
     try:
         session = get_session()
-        settings = session.query(BotSettings).filter(
-            BotSettings.chat_id == chat_id
-        ).first()
-
-        if settings:
-            settings.is_muted = 1 if muted else 0
-        else:
-            settings = BotSettings(chat_id=chat_id, is_muted=1 if muted else 0)
-            session.add(settings)
-
+        from sqlalchemy import text
+        # Try to update, if column doesn't exist - fail gracefully
+        session.execute(
+            text("UPDATE bot_settings SET is_muted = :muted WHERE chat_id = :chat_id"),
+            {"muted": 1 if muted else 0, "chat_id": chat_id}
+        )
         session.commit()
         session.close()
         logger.info(f"Chat {chat_id} mute status: {muted}")
         return True
     except Exception as e:
-        logger.error(f"Error setting mute status: {e}")
+        logger.debug(f"set_chat_muted fallback (column may not exist): {e}")
         return False

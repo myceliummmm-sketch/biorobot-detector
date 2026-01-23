@@ -24,8 +24,8 @@ def get_supabase():
     return _client
 
 
-def get_workspace_by_chat_id(chat_id: int) -> Optional[Dict]:
-    """Get workspace/deck from Supabase by Telegram group ID"""
+def get_project_by_chat_id(chat_id: int) -> Optional[Dict]:
+    """Get project from Supabase by Telegram group ID"""
     client = get_supabase()
     if not client:
         return None
@@ -36,20 +36,19 @@ def get_workspace_by_chat_id(chat_id: int) -> Optional[Dict]:
             .execute()
         return result.data[0] if result.data else None
     except Exception as e:
-        logger.error(f"Error getting workspace: {e}")
+        logger.error(f"Error getting project: {e}")
         return None
 
 
-def get_workspace_cards(workspace_id: str) -> List[Dict]:
-    """Get all cards for a workspace/deck"""
+def get_project_cards(project_id: str) -> List[Dict]:
+    """Get all cards for a project"""
     client = get_supabase()
     if not client:
         return []
     try:
         result = client.table("cards")\
             .select("*")\
-            .eq("project_id", workspace_id)\
-            .order("slot")\
+            .eq("project_id", project_id)\
             .execute()
         return result.data or []
     except Exception as e:
@@ -57,7 +56,7 @@ def get_workspace_cards(workspace_id: str) -> List[Dict]:
         return []
 
 
-def save_ai_message(workspace_id: str, user_id: int, agent: str, role: str, content: str):
+def save_ai_message(project_id: str, user_id: int, agent: str, role: str, content: str):
     """Save message to AI conversation history in Supabase"""
     client = get_supabase()
     if not client:
@@ -69,7 +68,7 @@ def save_ai_message(workspace_id: str, user_id: int, agent: str, role: str, cont
             return
 
         client.table("ai_conversations").insert({
-            "project_id": workspace_id,
+            "project_id": project_id,
             "user_id": profile_id,
             "agent": agent,
             "role": role,
@@ -132,32 +131,30 @@ def get_user_balance(telegram_id: int) -> Dict:
         return {"spores_balance": 0, "xp": 0, "error": str(e)}
 
 
-def build_workspace_context(chat_id: int) -> str:
-    """Build context string for AI from workspace data"""
-    workspace = get_workspace_by_chat_id(chat_id)
-    if not workspace:
+def build_project_context(chat_id: int) -> str:
+    """Build context string for AI from project data"""
+    project = get_project_by_chat_id(chat_id)
+    if not project:
         return ""
 
-    cards = get_workspace_cards(workspace["id"])
+    cards = get_project_cards(project["id"])
 
     # Format filled cards with more detail for Prisma
     cards_summary = []
     for card in cards:
         fill_rate = card.get("fill_rate", 0)
         if fill_rate > 0:
-            data = card.get("data", {})
+            content = card.get("content", {})
             stage = card.get("stage", "")
-            cards_summary.append(f"- [{stage}] {card['type']} ({fill_rate}%): {str(data)[:300]}")
+            cards_summary.append(f"- [{stage}] {card.get('type', 'card')} ({fill_rate}%): {str(content)[:300]}")
 
     # Calculate progress
     filled_count = sum(1 for c in cards if c.get("fill_rate", 0) > 50)
     total_cards = len(cards)
 
     context = f"""
-=== ВОРКСПЕЙС: {workspace['name']} ===
-Режим: {workspace.get('mode', 'chill')}
-PMF Score: {workspace.get('pmf_score', 0)}%
-Battery: {workspace.get('battery', 100)}%
+=== ПРОЕКТ: {project.get('name', 'Unnamed')} ===
+Стадия: {project.get('current_stage', 'idea')}
 Прогресс карточек: {filled_count}/{total_cards}
 
 Заполненные карточки:

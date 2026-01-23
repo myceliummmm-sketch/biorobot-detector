@@ -4,7 +4,7 @@ import re
 import google.generativeai as genai
 from config import GEMINI_API_KEY, get_system_prompt
 from database import get_recent_messages, get_memory_context, add_memory
-from supabase_client import build_workspace_context, get_workspace_by_chat_id, save_ai_message
+from supabase_client import build_project_context, get_project_by_chat_id, save_ai_message
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,9 @@ class PrismaGemini:
         logger.info("Prisma Gemini initialized")
 
     def _build_context(self, chat_id: int) -> str:
-        """Build context from recent messages, permanent memory, and workspace data"""
-        # Get workspace context from Supabase (cards, project info)
-        workspace_context = build_workspace_context(chat_id)
+        """Build context from recent messages, permanent memory, and project data"""
+        # Get project context from Supabase (cards, project info)
+        project_context = build_project_context(chat_id)
 
         # Get permanent memory
         memory_context = get_memory_context(chat_id, limit=15)
@@ -60,10 +60,10 @@ class PrismaGemini:
                 context_lines.append(f"[{role}]: {msg.content}")
             message_context = "\n".join(context_lines)
 
-        # Combine all context: workspace + memory + messages
+        # Combine all context: project + memory + messages
         parts = []
-        if workspace_context:
-            parts.append(workspace_context)
+        if project_context:
+            parts.append(project_context)
         if memory_context:
             parts.append(memory_context)
         parts.append(f"=== ПОСЛЕДНИЕ СООБЩЕНИЯ ===\n{message_context}")
@@ -134,11 +134,11 @@ class PrismaGemini:
             response = self.model.generate_content(full_prompt)
             response_text = response.text.strip()
 
-            # Save to Supabase if workspace exists
-            workspace = get_workspace_by_chat_id(chat_id)
-            if workspace and user_id:
-                save_ai_message(workspace["id"], user_id, "prisma", "user", message)
-                save_ai_message(workspace["id"], user_id, "prisma", "assistant", response_text)
+            # Save to Supabase if project exists
+            project = get_project_by_chat_id(chat_id)
+            if project and user_id:
+                save_ai_message(project["id"], user_id, "prisma", "user", message)
+                save_ai_message(project["id"], user_id, "prisma", "assistant", response_text)
 
             # Try to auto-save important info (fire and forget)
             try:
@@ -228,11 +228,11 @@ class PrismaGemini:
             response = self.model.generate_content([prompt, image])
             response_text = response.text.strip()
 
-            # Save to Supabase if workspace exists
-            workspace = get_workspace_by_chat_id(chat_id)
-            if workspace and user_id:
-                save_ai_message(workspace["id"], user_id, "prisma", "user", f"[ФОТО] {message}")
-                save_ai_message(workspace["id"], user_id, "prisma", "assistant", response_text)
+            # Save to Supabase if project exists
+            project = get_project_by_chat_id(chat_id)
+            if project and user_id:
+                save_ai_message(project["id"], user_id, "prisma", "user", f"[ФОТО] {message}")
+                save_ai_message(project["id"], user_id, "prisma", "assistant", response_text)
 
             return response_text
 
