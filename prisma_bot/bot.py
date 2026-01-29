@@ -105,50 +105,23 @@ def is_idea_topic_by_name(topic_name: str) -> bool:
 
 # ==================== WELCOME MESSAGE ====================
 
-# Pending introductions: {chat_id: {user_id: (join_time, user_name, message_id)}}
-_pending_intros: dict = {}
+WELCOME_MESSAGE = """💎 Привет! Я Prisma — твой продакт-менеджер.
 
-WELCOME_MESSAGES = [
-    """💎 Йо! Я Prisma — твой продакт-менеджер.
-
-Помогу понять что строишь и для кого. Веду через карточки, задаю вопросы, держу фокус.
+Моя работа — помочь тебе понять, что ты строишь и для кого. Буду вести через карточки, задавать вопросы и держать фокус на важном.
 
 📍 **Как работаем:**
-▸ Пиши в **#idea** — проведу через 5 карточек
-▸ Можешь голосом — расшифрую
-▸ Варианты A/B/C/D на каждый вопрос
+▸ Пиши в топик **#idea** — там я проведу тебя через 5 карточек
+▸ Можешь отвечать голосом — я расшифрую
+▸ На каждый вопрос предложу варианты A/B/C/D
 
-☢️ **Toxic:** А ты кто такой вообще? Представься хотя бы. Напиши кто ты и что хочешь построить. У тебя 5 минут, потом вылетишь.
+🎴 **Фаза IDEA — 5 карт:**
+1. 🎯 Продукт — что создаёшь?
+2. 🔥 Проблема — чью боль решаешь?
+3. 👥 Аудитория — кто твой человек?
+4. 💎 Ценность — в чём выгода?
+5. 🔮 Видение — куда это ведёт?
 
-Погнали? 🚀""",
-
-    """💎 Привет! Prisma на связи.
-
-Я помогаю фаундерам превращать идеи в структуру. Карточки, вопросы, фокус — всё по делу.
-
-🎴 **Фаза IDEA:**
-🎯 Продукт → 🔥 Проблема → 👥 Аудитория → 💎 Ценность → 🔮 Видение
-
-☢️ **Toxic:** Слышь, новенький. Тут не детский сад. Напиши хотя бы "привет" и расскажи зачем пришёл. 5 минут — или на выход.
-
-Готов? Пиши в **#idea**! 💎""",
-
-    """💎 Welcome! Я Prisma.
-
-Моя работа — задавать правильные вопросы. Твоя — честно отвечать. Вместе соберём колоду карточек для твоего проекта.
-
-📍 **Старт:** топик **#idea**
-🎤 **Голос:** расшифрую
-🎴 **5 карточек:** Product → Problem → Audience → Value → Vision
-
-☢️ **Toxic:** Эй, я тебя не знаю. Представься нормально — кто ты, что делаешь, зачем здесь. Молчунов не держим. 5 минут.
-
-Let's go! 🔥""",
-]
-
-def get_welcome_message() -> str:
-    """Get random welcome message"""
-    return random.choice(WELCOME_MESSAGES)
+Готов? Напиши что-нибудь в **#idea** и начнём! 💎"""
 
 
 async def handle_new_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -178,110 +151,12 @@ async def handle_new_chat_member(update: Update, context: ContextTypes.DEFAULT_T
             # Try to send welcome to the main chat (General topic has thread_id = None or 0)
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=get_welcome_message(),
+                text=WELCOME_MESSAGE,
                 parse_mode="Markdown"
             )
             logger.info(f"Sent welcome message to {chat_id}")
         except Exception as e:
             logger.error(f"Failed to send welcome: {e}")
-
-
-async def handle_user_joined(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle when a new user joins the chat - welcome them and start 5-min timer"""
-    message = update.message
-    if not message or not message.new_chat_members:
-        return
-
-    chat_id = message.chat_id
-
-    for new_user in message.new_chat_members:
-        # Skip bots
-        if new_user.is_bot:
-            continue
-
-        user_id = new_user.id
-        user_name = new_user.first_name or new_user.username or "Новенький"
-
-        logger.info(f"New user joined {chat_id}: {user_name} ({user_id})")
-
-        # Send personal welcome
-        welcome_texts = [
-            f"👋 {user_name}, добро пожаловать!\n\n☢️ **Toxic:** Представься. Кто ты и что строишь? 5 минут.",
-            f"🆕 О, {user_name}!\n\n☢️ **Toxic:** Новенький? Расскажи о себе. Кратко. 5 минут на ответ.",
-            f"💎 {user_name} присоединился!\n\n☢️ **Toxic:** Эй. Напиши кто ты и зачем пришёл. Таймер пошёл.",
-        ]
-
-        try:
-            msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=random.choice(welcome_texts),
-                parse_mode="Markdown"
-            )
-
-            # Track this user for 5-minute intro check
-            if chat_id not in _pending_intros:
-                _pending_intros[chat_id] = {}
-
-            _pending_intros[chat_id][user_id] = (datetime.utcnow(), user_name, msg.message_id)
-
-            # Schedule kick check in 5 minutes
-            context.job_queue.run_once(
-                check_intro_timeout,
-                when=300,  # 5 minutes
-                data={"chat_id": chat_id, "user_id": user_id, "user_name": user_name},
-                name=f"intro_check_{chat_id}_{user_id}"
-            )
-
-            logger.info(f"Started 5-min intro timer for {user_name} in {chat_id}")
-
-        except Exception as e:
-            logger.error(f"Failed to send user welcome: {e}")
-
-
-async def check_intro_timeout(context: ContextTypes.DEFAULT_TYPE):
-    """Check if user introduced themselves, kick if not"""
-    job_data = context.job.data
-    chat_id = job_data["chat_id"]
-    user_id = job_data["user_id"]
-    user_name = job_data["user_name"]
-
-    # Check if user is still pending (hasn't written anything)
-    if chat_id in _pending_intros and user_id in _pending_intros[chat_id]:
-        logger.info(f"User {user_name} ({user_id}) didn't introduce themselves in {chat_id}, kicking...")
-
-        # Remove from pending
-        del _pending_intros[chat_id][user_id]
-
-        try:
-            # Try to kick the user
-            await context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
-            # Immediately unban so they can rejoin later
-            await context.bot.unban_chat_member(chat_id=chat_id, user_id=user_id)
-
-            # Send kick message
-            kick_messages = [
-                f"☢️ **Toxic:** {user_name} молчал 5 минут. Выкинул. Вернётся — пусть представится.",
-                f"☢️ **Toxic:** {user_name} не ответил. Kicked. Молчунов не держим.",
-                f"☢️ **Toxic:** Таймаут. {user_name} ушёл. Кто следующий?",
-            ]
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=random.choice(kick_messages),
-                parse_mode="Markdown"
-            )
-
-            logger.info(f"Kicked {user_name} ({user_id}) from {chat_id} for not introducing")
-
-        except Exception as e:
-            logger.error(f"Failed to kick user {user_id}: {e}")
-
-
-def clear_pending_intro(chat_id: int, user_id: int):
-    """Clear pending intro when user writes a message"""
-    if chat_id in _pending_intros and user_id in _pending_intros[chat_id]:
-        user_name = _pending_intros[chat_id][user_id][1]
-        del _pending_intros[chat_id][user_id]
-        logger.info(f"Cleared intro timer for {user_name} ({user_id}) - they wrote something")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -299,9 +174,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_name = user.first_name or user.username or "аноним"
-
-    # Clear pending intro timer if user writes anything
-    clear_pending_intro(chat_id, user.id)
 
     # === DIALOG ENGINE ROUTING ===
     # Check if this message is in an #idea topic that DialogEngine should handle
@@ -1245,12 +1117,6 @@ def main():
     app.add_handler(ChatMemberHandler(
         handle_new_chat_member,
         ChatMemberHandler.MY_CHAT_MEMBER
-    ))
-
-    # Handler for when new users join (5-min intro timer)
-    app.add_handler(MessageHandler(
-        filters.StatusUpdate.NEW_CHAT_MEMBERS,
-        handle_user_joined
     ))
 
     app.add_handler(MessageHandler(
