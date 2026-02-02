@@ -33,6 +33,167 @@ logger = logging.getLogger(__name__)
 TIMEZONE = "Europe/Madrid"
 
 
+# ==================== SPAM DETECTION ====================
+
+SPAM_KEYWORDS = [
+    # Crypto scams
+    "crypto", "крипто", "криптовалют", "bitcoin", "биткоин", "btc", "eth", "ethereum",
+    "эфириум", "binance", "бинанс", "trading", "трейдинг", "трейдер",
+    "pump", "памп", "dump", "дамп", "token", "токен", "airdrop", "эирдроп",
+    "nft", "defi", "дефи", "web3", "веб3", "blockchain", "блокчейн",
+    "wallet", "кошелек", "кошелёк", "seed phrase", "сид фраз",
+
+    # Forex scams
+    "forex", "форекс", "бинарн", "binary option", "опцион",
+    "сигнал", "signal", "пассивн доход", "passive income",
+
+    # Get rich quick
+    "заработ", "earn money", "make money", "деньги быстро", "быстрые деньги",
+    "инвестиц", "invest", "вложи", "доход", "profit", "профит",
+    "x2", "x3", "x5", "x10", "x100", "удвоить", "утроить",
+    "гарантир", "guaranteed", "без риска", "no risk",
+    "финансов свобод", "financial freedom",
+
+    # MLM / Pyramid
+    "mlm", "млм", "сетев маркетинг", "network marketing", "пирамид", "pyramid",
+    "реферал", "referral", "партнёрк", "партнерк", "affiliate",
+
+    # Casino / Betting
+    "казино", "casino", "ставк", "bet", "betting", "1xbet", "1хбет",
+    "букмекер", "bookmaker", "слот", "slot", "рулетк", "roulette",
+    "покер", "poker", "джекпот", "jackpot",
+
+    # Suspicious links patterns
+    "t.me/", "telegram.me/", "bit.ly/", "tinyurl", "clck.ru",
+    "присоединяйся", "join now", "регистрир", "register",
+
+    # Adult / Dating spam
+    "знакомств", "dating", "девушк ищ", "парень ищ",
+    "интим", "секс", "эскорт", "escort",
+
+    # Fake jobs
+    "работа на дому", "work from home", "удалённ работ", "remote job",
+    "менеджер по", "оператор", "без опыта", "no experience",
+    "от 1000$", "от 500$", "от 100$", "в день", "per day",
+]
+
+SPAM_PATTERNS = [
+    # URLs with suspicious TLDs
+    r"https?://[^\s]+\.(xyz|top|club|online|site|fun|icu|buzz)",
+    # Telegram links
+    r"t\.me/[a-zA-Z0-9_]+",
+    # Too many emojis (spam indicator)
+    r"[💰💵💸🤑💎🚀🔥]{3,}",
+    # Phone numbers
+    r"\+\d{10,}",
+    # Wallet addresses
+    r"0x[a-fA-F0-9]{40}",
+    r"[13][a-km-zA-HJ-NP-Z1-9]{25,34}",  # Bitcoin
+]
+
+import re
+
+def is_spam_message(text: str, user_name: str = "") -> tuple[bool, str]:
+    """
+    Check if message is spam.
+    Returns (is_spam, reason)
+    """
+    if not text:
+        return False, ""
+
+    text_lower = text.lower()
+
+    # Check keywords
+    spam_found = []
+    for keyword in SPAM_KEYWORDS:
+        if keyword.lower() in text_lower:
+            spam_found.append(keyword)
+
+    # If 2+ spam keywords found - definitely spam
+    if len(spam_found) >= 2:
+        return True, f"keywords: {', '.join(spam_found[:3])}"
+
+    # Check regex patterns
+    for pattern in SPAM_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return True, f"pattern match"
+
+    # Check for too many links
+    links = re.findall(r"https?://[^\s]+", text)
+    if len(links) >= 3:
+        return True, "too many links"
+
+    # Check for forwarded spam (new users posting links immediately)
+    if links and len(text) > 200:
+        # Long message with links from new user = suspicious
+        return True, "suspicious long message with links"
+
+    return False, ""
+
+
+SPAM_BAN_MESSAGES = [
+    "☢️ **{name}** забанен.\n\nСпам детектед: {reason}. Синдикат не для скамеров.",
+    "☢️ Спамер **{name}** удалён.\n\n{reason}. Тут строят проекты, а не впаривают крипту.",
+    "☢️ **{name}** — banned.\n\nПричина: {reason}. Форекс и крипто-скам не пройдут.",
+    "☢️ Удалил **{name}**.\n\n{reason}. Спамерам тут не место.",
+]
+
+
+async def check_and_ban_spam(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """
+    Check message for spam and ban user if detected.
+    Returns True if message was spam (and handled), False otherwise.
+    """
+    message = update.message
+    if not message or not message.text:
+        return False
+
+    user = message.from_user
+    if not user:
+        return False
+
+    chat_id = message.chat_id
+    user_name = user.first_name or user.username or "Спамер"
+
+    is_spam, reason = is_spam_message(message.text, user_name)
+
+    if is_spam:
+        logger.warning(f"SPAM detected from {user_name} ({user.id}): {reason}")
+        logger.warning(f"Message: {message.text[:200]}")
+
+        try:
+            # Delete the spam message
+            await message.delete()
+            logger.info(f"Deleted spam message from {user_name}")
+
+            # Ban the user
+            await context.bot.ban_chat_member(chat_id=chat_id, user_id=user.id)
+            logger.info(f"Banned spammer {user_name} ({user.id})")
+
+            # Send notification
+            ban_msg = random.choice(SPAM_BAN_MESSAGES).format(name=user_name, reason=reason)
+            await context.bot.send_message(chat_id=chat_id, text=ban_msg, parse_mode="Markdown")
+
+            # Remove from pending intros if exists
+            pending_intros = context.bot_data.get("pending_intros", {})
+            if user.id in pending_intros:
+                del context.bot_data["pending_intros"][user.id]
+
+            # Cancel any pending kick jobs
+            kick_job_name = f"kick_{user.id}"
+            current_jobs = context.job_queue.get_jobs_by_name(kick_job_name)
+            for job in current_jobs:
+                job.schedule_removal()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to handle spam: {e}")
+            return False
+
+    return False
+
+
 async def handle_new_member_intro(update: Update, context: ContextTypes.DEFAULT_TYPE, intro_data: dict):
     """Handle new member's response to welcome questions - develop dialogue about their project"""
     message = update.message
@@ -125,6 +286,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.is_bot and user.id == (await context.bot.get_me()).id:
         logger.info("Skipping own bot message")
         return
+
+    # === SPAM CHECK ===
+    # Check for spam FIRST before any other processing
+    if await check_and_ban_spam(update, context):
+        return  # Spam was detected and handled
 
     # Check if this is a new member responding to welcome questions
     pending_intros = context.bot_data.get("pending_intros", {})
