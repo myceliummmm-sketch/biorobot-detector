@@ -42,6 +42,13 @@ async def handle_new_member_intro(update: Update, context: ContextTypes.DEFAULT_
 
     logger.info(f"Processing intro from {user_name}: {message.text[:100]}")
 
+    # Cancel the kick timer since user responded
+    kick_job_name = f"kick_{user.id}"
+    current_jobs = context.job_queue.get_jobs_by_name(kick_job_name)
+    for job in current_jobs:
+        job.schedule_removal()
+        logger.info(f"Cancelled kick timer for {user_name}")
+
     # Show typing indicator
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
     await asyncio.sleep(random.uniform(1.5, 3.0))
@@ -335,6 +342,158 @@ async def daily_card_job(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in daily card job: {e}")
 
 
+# ==================== WELCOME MESSAGES ====================
+
+# Varied welcome messages with syndicate explanation
+WELCOME_MESSAGES = [
+    """☢️ Йо, **{name}**! Добро пожаловать в лобби **Mycelium Syndicate**.
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Что здесь происходит?**
+Это AI-синдикат для фаундеров. 6 агентов помогают строить проекты от идеи до запуска:
+
+🌲 **Ever** — стратег, видит картину целиком
+💎 **Prisma** — продакт-менеджер, ведёт через карточки
+☢️ **Toxic** — red team (это я), ломаю идеи до рынка
+🔥 **Phoenix** — маркетинг, знает как продать
+🎨 **Virgil** — креатив, делает красиво
+🧘 **Zen** — баланс, следит за энергией
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Твоя очередь.** Расскажи:
+▸ Кто ты?
+▸ Есть проект? Над чем работаешь?
+▸ Какая экспертиза / чем можешь помочь?
+
+⏱ **5 минут** на ответ. Молчунов не держим.""",
+
+    """☢️ **{name}** зашёл в лобби. Отлично.
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Mycelium Syndicate** — AI-акселератор нового типа.
+
+**Как работает:**
+1. Создаёшь воркспейс под проект
+2. Проходишь 4 фазы: IDEA → RESEARCH → BUILD → GROW
+3. AI-агенты помогают на каждом этапе
+4. Зарабатываешь XP и Spores
+
+**Команда:**
+🌲 Ever • 💎 Prisma • ☢️ Toxic • 🔥 Phoenix • 🎨 Virgil • 🧘 Zen
+
+━━━━━━━━━━━━━━━━━━━━
+
+Я Toxic — привратник. Моя работа — понять, кто ты и зачем здесь.
+
+**Напиши:**
+• Над чем работаешь или хочешь работать?
+• Какой экспертизой можешь поделиться?
+
+⏱ **5 минут.** Таймер пошёл.""",
+
+    """☢️ О, новенький — **{name}**!
+
+━━━━━━━━━━━━━━━━━━━━
+
+Это **Mycelium** — грибница для билдеров.
+
+Здесь собираются те, кто строит проекты, а не мечтает о них. AI-агенты помогают:
+• Структурировать идею (IDEA)
+• Исследовать рынок (RESEARCH)
+• Собрать MVP (BUILD)
+• Найти юзеров (GROW)
+
+**Агенты синдиката:**
+🌲 Ever — стратегия
+💎 Prisma — продукт
+☢️ Toxic — критика (я)
+🔥 Phoenix — рост
+🎨 Virgil — дизайн
+🧘 Zen — баланс
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Правила простые:**
+1. Представься — кто ты и что строишь
+2. Не молчи — lurker'ов выкидываем
+3. Помогай другим — это синдикат, не соло
+
+⏱ У тебя **5 минут** на интро. Время пошло.""",
+
+    """☢️ **{name}**, добро пожаловать в Syndicate.
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Что такое Mycelium?**
+AI-синдикат где фаундеры строят проекты вместе с командой агентов. Каждый агент — специалист:
+
+• 🌲 Ever Green — Chief Strategist
+• 💎 Prisma — Product Manager
+• ☢️ Toxic — Red Team Lead (это я)
+• 🔥 Phoenix — Growth Hacker
+• 🎨 Virgil — Creative Director
+• 🧘 Zen — Wellness Coach
+
+**4 фазы:**
+🎴 IDEA → 🔍 RESEARCH → 🛠 BUILD → 📈 GROW
+
+━━━━━━━━━━━━━━━━━━━━
+
+Я привратник. Внутрь попадают те, кто реально строит или может усилить команду.
+
+**Расскажи:**
+▸ Есть проект? Над чем работаешь?
+▸ Нет проекта? Что хочешь построить?
+▸ Какой экспертизой владеешь?
+
+⏱ **5 минут.** Молчание = выход.""",
+]
+
+KICK_MESSAGES = [
+    "☢️ **{name}** молчал 5 минут.\n\nКicked. В синдикате не держим тех, кто не может написать пару слов о себе. Дверь открыта — но в следующий раз представься сразу.",
+    "☢️ Таймаут для **{name}**.\n\nУдалён. Правила для всех одинаковые: представился — добро пожаловать, молчишь — на выход.",
+    "☢️ **{name}** — out.\n\n5 минут прошло. Молчунов не держим. Хочешь вернуться — будь готов рассказать о себе.",
+    "☢️ **{name}** не ответил.\n\nKicked. Это не место для lurker'ов. Syndicate для тех, кто строит и общается.",
+]
+
+# Pending kicks: {user_id: (chat_id, user_name, job)}
+_pending_kicks: dict = {}
+
+
+async def kick_silent_user(context: ContextTypes.DEFAULT_TYPE):
+    """Kick user who didn't introduce themselves within 5 minutes"""
+    job_data = context.job.data
+    user_id = job_data["user_id"]
+    chat_id = job_data["chat_id"]
+    user_name = job_data["user_name"]
+
+    # Check if user is still pending (hasn't written anything)
+    pending_intros = context.bot_data.get("pending_intros", {})
+    if user_id in pending_intros:
+        logger.info(f"User {user_name} ({user_id}) didn't introduce themselves, kicking...")
+
+        # Remove from pending
+        del context.bot_data["pending_intros"][user_id]
+
+        try:
+            # Kick user
+            await context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
+            # Immediately unban so they can rejoin later
+            await context.bot.unban_chat_member(chat_id=chat_id, user_id=user_id)
+
+            # Send kick message
+            kick_msg = random.choice(KICK_MESSAGES).format(name=user_name)
+            await context.bot.send_message(chat_id=chat_id, text=kick_msg, parse_mode="Markdown")
+
+            logger.info(f"Kicked {user_name} ({user_id}) from {chat_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to kick user {user_id}: {e}")
+
+
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Welcome new members to the lobby - ask about projects and expertise"""
     message = update.message
@@ -356,19 +515,10 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
         await asyncio.sleep(random.uniform(1.0, 2.0))
 
-        # Welcome message as lobby gatekeeper
-        welcome_text = f"""☢️ о, {user_name}! Добро пожаловать в лобби Syndicate.
+        # Random welcome message with syndicate explanation
+        welcome_text = random.choice(WELCOME_MESSAGES).format(name=user_name)
 
-Здесь собираются билдеры — те, кто строит, а не просто мечтает.
-
-Расскажи о себе:
-🔹 Есть проект? Над чем работаешь?
-🔹 Какая помощь нужна?
-🔹 Какой экспертизой можешь поделиться?
-
-Внутрь пускаем тех, кто реально строит или может усилить команду. Покажи что у тебя есть — и поговорим 🍄"""
-
-        await message.reply_text(welcome_text)
+        await message.reply_text(welcome_text, parse_mode="Markdown")
 
         # Store that we're waiting for intro from this user
         if "pending_intros" not in context.bot_data:
@@ -378,6 +528,15 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "chat_id": chat_id,
             "stage": "awaiting_intro"
         }
+
+        # Schedule kick in 5 minutes if user doesn't respond
+        context.job_queue.run_once(
+            kick_silent_user,
+            when=300,  # 5 minutes
+            data={"user_id": new_member.id, "chat_id": chat_id, "user_name": user_name},
+            name=f"kick_{new_member.id}"
+        )
+        logger.info(f"Started 5-min intro timer for {user_name}")
 
 
 def main():
