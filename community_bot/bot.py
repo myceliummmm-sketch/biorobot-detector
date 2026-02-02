@@ -33,6 +33,167 @@ logger = logging.getLogger(__name__)
 TIMEZONE = "Europe/Madrid"
 
 
+# ==================== SPAM DETECTION ====================
+
+SPAM_KEYWORDS = [
+    # Crypto scams
+    "crypto", "крипто", "криптовалют", "bitcoin", "биткоин", "btc", "eth", "ethereum",
+    "эфириум", "binance", "бинанс", "trading", "трейдинг", "трейдер",
+    "pump", "памп", "dump", "дамп", "token", "токен", "airdrop", "эирдроп",
+    "nft", "defi", "дефи", "web3", "веб3", "blockchain", "блокчейн",
+    "wallet", "кошелек", "кошелёк", "seed phrase", "сид фраз",
+
+    # Forex scams
+    "forex", "форекс", "бинарн", "binary option", "опцион",
+    "сигнал", "signal", "пассивн доход", "passive income",
+
+    # Get rich quick
+    "заработ", "earn money", "make money", "деньги быстро", "быстрые деньги",
+    "инвестиц", "invest", "вложи", "доход", "profit", "профит",
+    "x2", "x3", "x5", "x10", "x100", "удвоить", "утроить",
+    "гарантир", "guaranteed", "без риска", "no risk",
+    "финансов свобод", "financial freedom",
+
+    # MLM / Pyramid
+    "mlm", "млм", "сетев маркетинг", "network marketing", "пирамид", "pyramid",
+    "реферал", "referral", "партнёрк", "партнерк", "affiliate",
+
+    # Casino / Betting
+    "казино", "casino", "ставк", "bet", "betting", "1xbet", "1хбет",
+    "букмекер", "bookmaker", "слот", "slot", "рулетк", "roulette",
+    "покер", "poker", "джекпот", "jackpot",
+
+    # Suspicious links patterns
+    "t.me/", "telegram.me/", "bit.ly/", "tinyurl", "clck.ru",
+    "присоединяйся", "join now", "регистрир", "register",
+
+    # Adult / Dating spam
+    "знакомств", "dating", "девушк ищ", "парень ищ",
+    "интим", "секс", "эскорт", "escort",
+
+    # Fake jobs
+    "работа на дому", "work from home", "удалённ работ", "remote job",
+    "менеджер по", "оператор", "без опыта", "no experience",
+    "от 1000$", "от 500$", "от 100$", "в день", "per day",
+]
+
+SPAM_PATTERNS = [
+    # URLs with suspicious TLDs
+    r"https?://[^\s]+\.(xyz|top|club|online|site|fun|icu|buzz)",
+    # Telegram links
+    r"t\.me/[a-zA-Z0-9_]+",
+    # Too many emojis (spam indicator)
+    r"[💰💵💸🤑💎🚀🔥]{3,}",
+    # Phone numbers
+    r"\+\d{10,}",
+    # Wallet addresses
+    r"0x[a-fA-F0-9]{40}",
+    r"[13][a-km-zA-HJ-NP-Z1-9]{25,34}",  # Bitcoin
+]
+
+import re
+
+def is_spam_message(text: str, user_name: str = "") -> tuple[bool, str]:
+    """
+    Check if message is spam.
+    Returns (is_spam, reason)
+    """
+    if not text:
+        return False, ""
+
+    text_lower = text.lower()
+
+    # Check keywords
+    spam_found = []
+    for keyword in SPAM_KEYWORDS:
+        if keyword.lower() in text_lower:
+            spam_found.append(keyword)
+
+    # If 2+ spam keywords found - definitely spam
+    if len(spam_found) >= 2:
+        return True, f"keywords: {', '.join(spam_found[:3])}"
+
+    # Check regex patterns
+    for pattern in SPAM_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return True, f"pattern match"
+
+    # Check for too many links
+    links = re.findall(r"https?://[^\s]+", text)
+    if len(links) >= 3:
+        return True, "too many links"
+
+    # Check for forwarded spam (new users posting links immediately)
+    if links and len(text) > 200:
+        # Long message with links from new user = suspicious
+        return True, "suspicious long message with links"
+
+    return False, ""
+
+
+SPAM_BAN_MESSAGES = [
+    "☢️ **{name}** забанен.\n\nСпам детектед: {reason}. Синдикат не для скамеров.",
+    "☢️ Спамер **{name}** удалён.\n\n{reason}. Тут строят проекты, а не впаривают крипту.",
+    "☢️ **{name}** — banned.\n\nПричина: {reason}. Форекс и крипто-скам не пройдут.",
+    "☢️ Удалил **{name}**.\n\n{reason}. Спамерам тут не место.",
+]
+
+
+async def check_and_ban_spam(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """
+    Check message for spam and ban user if detected.
+    Returns True if message was spam (and handled), False otherwise.
+    """
+    message = update.message
+    if not message or not message.text:
+        return False
+
+    user = message.from_user
+    if not user:
+        return False
+
+    chat_id = message.chat_id
+    user_name = user.first_name or user.username or "Спамер"
+
+    is_spam, reason = is_spam_message(message.text, user_name)
+
+    if is_spam:
+        logger.warning(f"SPAM detected from {user_name} ({user.id}): {reason}")
+        logger.warning(f"Message: {message.text[:200]}")
+
+        try:
+            # Delete the spam message
+            await message.delete()
+            logger.info(f"Deleted spam message from {user_name}")
+
+            # Ban the user
+            await context.bot.ban_chat_member(chat_id=chat_id, user_id=user.id)
+            logger.info(f"Banned spammer {user_name} ({user.id})")
+
+            # Send notification
+            ban_msg = random.choice(SPAM_BAN_MESSAGES).format(name=user_name, reason=reason)
+            await context.bot.send_message(chat_id=chat_id, text=ban_msg, parse_mode="Markdown")
+
+            # Remove from pending intros if exists
+            pending_intros = context.bot_data.get("pending_intros", {})
+            if user.id in pending_intros:
+                del context.bot_data["pending_intros"][user.id]
+
+            # Cancel any pending kick jobs
+            kick_job_name = f"kick_{user.id}"
+            current_jobs = context.job_queue.get_jobs_by_name(kick_job_name)
+            for job in current_jobs:
+                job.schedule_removal()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to handle spam: {e}")
+            return False
+
+    return False
+
+
 async def handle_new_member_intro(update: Update, context: ContextTypes.DEFAULT_TYPE, intro_data: dict):
     """Handle new member's response to welcome questions - develop dialogue about their project"""
     message = update.message
@@ -41,6 +202,13 @@ async def handle_new_member_intro(update: Update, context: ContextTypes.DEFAULT_
     user_name = intro_data.get("name", user.first_name)
 
     logger.info(f"Processing intro from {user_name}: {message.text[:100]}")
+
+    # Cancel the kick timer since user responded
+    kick_job_name = f"kick_{user.id}"
+    current_jobs = context.job_queue.get_jobs_by_name(kick_job_name)
+    for job in current_jobs:
+        job.schedule_removal()
+        logger.info(f"Cancelled kick timer for {user_name}")
 
     # Show typing indicator
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
@@ -118,6 +286,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.is_bot and user.id == (await context.bot.get_me()).id:
         logger.info("Skipping own bot message")
         return
+
+    # === SPAM CHECK ===
+    # Check for spam FIRST before any other processing
+    if await check_and_ban_spam(update, context):
+        return  # Spam was detected and handled
 
     # Check if this is a new member responding to welcome questions
     pending_intros = context.bot_data.get("pending_intros", {})
@@ -335,6 +508,158 @@ async def daily_card_job(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in daily card job: {e}")
 
 
+# ==================== WELCOME MESSAGES ====================
+
+# Varied welcome messages with syndicate explanation
+WELCOME_MESSAGES = [
+    """☢️ Йо, **{name}**! Добро пожаловать в лобби **Mycelium Syndicate**.
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Что здесь происходит?**
+Это AI-синдикат для фаундеров. 6 агентов помогают строить проекты от идеи до запуска:
+
+🌲 **Ever** — стратег, видит картину целиком
+💎 **Prisma** — продакт-менеджер, ведёт через карточки
+☢️ **Toxic** — red team (это я), ломаю идеи до рынка
+🔥 **Phoenix** — маркетинг, знает как продать
+🎨 **Virgil** — креатив, делает красиво
+🧘 **Zen** — баланс, следит за энергией
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Твоя очередь.** Расскажи:
+▸ Кто ты?
+▸ Есть проект? Над чем работаешь?
+▸ Какая экспертиза / чем можешь помочь?
+
+⏱ **5 минут** на ответ. Молчунов не держим.""",
+
+    """☢️ **{name}** зашёл в лобби. Отлично.
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Mycelium Syndicate** — AI-акселератор нового типа.
+
+**Как работает:**
+1. Создаёшь воркспейс под проект
+2. Проходишь 4 фазы: IDEA → RESEARCH → BUILD → GROW
+3. AI-агенты помогают на каждом этапе
+4. Зарабатываешь XP и Spores
+
+**Команда:**
+🌲 Ever • 💎 Prisma • ☢️ Toxic • 🔥 Phoenix • 🎨 Virgil • 🧘 Zen
+
+━━━━━━━━━━━━━━━━━━━━
+
+Я Toxic — привратник. Моя работа — понять, кто ты и зачем здесь.
+
+**Напиши:**
+• Над чем работаешь или хочешь работать?
+• Какой экспертизой можешь поделиться?
+
+⏱ **5 минут.** Таймер пошёл.""",
+
+    """☢️ О, новенький — **{name}**!
+
+━━━━━━━━━━━━━━━━━━━━
+
+Это **Mycelium** — грибница для билдеров.
+
+Здесь собираются те, кто строит проекты, а не мечтает о них. AI-агенты помогают:
+• Структурировать идею (IDEA)
+• Исследовать рынок (RESEARCH)
+• Собрать MVP (BUILD)
+• Найти юзеров (GROW)
+
+**Агенты синдиката:**
+🌲 Ever — стратегия
+💎 Prisma — продукт
+☢️ Toxic — критика (я)
+🔥 Phoenix — рост
+🎨 Virgil — дизайн
+🧘 Zen — баланс
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Правила простые:**
+1. Представься — кто ты и что строишь
+2. Не молчи — lurker'ов выкидываем
+3. Помогай другим — это синдикат, не соло
+
+⏱ У тебя **5 минут** на интро. Время пошло.""",
+
+    """☢️ **{name}**, добро пожаловать в Syndicate.
+
+━━━━━━━━━━━━━━━━━━━━
+
+**Что такое Mycelium?**
+AI-синдикат где фаундеры строят проекты вместе с командой агентов. Каждый агент — специалист:
+
+• 🌲 Ever Green — Chief Strategist
+• 💎 Prisma — Product Manager
+• ☢️ Toxic — Red Team Lead (это я)
+• 🔥 Phoenix — Growth Hacker
+• 🎨 Virgil — Creative Director
+• 🧘 Zen — Wellness Coach
+
+**4 фазы:**
+🎴 IDEA → 🔍 RESEARCH → 🛠 BUILD → 📈 GROW
+
+━━━━━━━━━━━━━━━━━━━━
+
+Я привратник. Внутрь попадают те, кто реально строит или может усилить команду.
+
+**Расскажи:**
+▸ Есть проект? Над чем работаешь?
+▸ Нет проекта? Что хочешь построить?
+▸ Какой экспертизой владеешь?
+
+⏱ **5 минут.** Молчание = выход.""",
+]
+
+KICK_MESSAGES = [
+    "☢️ **{name}** молчал 5 минут.\n\nКicked. В синдикате не держим тех, кто не может написать пару слов о себе. Дверь открыта — но в следующий раз представься сразу.",
+    "☢️ Таймаут для **{name}**.\n\nУдалён. Правила для всех одинаковые: представился — добро пожаловать, молчишь — на выход.",
+    "☢️ **{name}** — out.\n\n5 минут прошло. Молчунов не держим. Хочешь вернуться — будь готов рассказать о себе.",
+    "☢️ **{name}** не ответил.\n\nKicked. Это не место для lurker'ов. Syndicate для тех, кто строит и общается.",
+]
+
+# Pending kicks: {user_id: (chat_id, user_name, job)}
+_pending_kicks: dict = {}
+
+
+async def kick_silent_user(context: ContextTypes.DEFAULT_TYPE):
+    """Kick user who didn't introduce themselves within 5 minutes"""
+    job_data = context.job.data
+    user_id = job_data["user_id"]
+    chat_id = job_data["chat_id"]
+    user_name = job_data["user_name"]
+
+    # Check if user is still pending (hasn't written anything)
+    pending_intros = context.bot_data.get("pending_intros", {})
+    if user_id in pending_intros:
+        logger.info(f"User {user_name} ({user_id}) didn't introduce themselves, kicking...")
+
+        # Remove from pending
+        del context.bot_data["pending_intros"][user_id]
+
+        try:
+            # Kick user
+            await context.bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
+            # Immediately unban so they can rejoin later
+            await context.bot.unban_chat_member(chat_id=chat_id, user_id=user_id)
+
+            # Send kick message
+            kick_msg = random.choice(KICK_MESSAGES).format(name=user_name)
+            await context.bot.send_message(chat_id=chat_id, text=kick_msg, parse_mode="Markdown")
+
+            logger.info(f"Kicked {user_name} ({user_id}) from {chat_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to kick user {user_id}: {e}")
+
+
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Welcome new members to the lobby - ask about projects and expertise"""
     message = update.message
@@ -356,19 +681,10 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
         await asyncio.sleep(random.uniform(1.0, 2.0))
 
-        # Welcome message as lobby gatekeeper
-        welcome_text = f"""☢️ о, {user_name}! Добро пожаловать в лобби Syndicate.
+        # Random welcome message with syndicate explanation
+        welcome_text = random.choice(WELCOME_MESSAGES).format(name=user_name)
 
-Здесь собираются билдеры — те, кто строит, а не просто мечтает.
-
-Расскажи о себе:
-🔹 Есть проект? Над чем работаешь?
-🔹 Какая помощь нужна?
-🔹 Какой экспертизой можешь поделиться?
-
-Внутрь пускаем тех, кто реально строит или может усилить команду. Покажи что у тебя есть — и поговорим 🍄"""
-
-        await message.reply_text(welcome_text)
+        await message.reply_text(welcome_text, parse_mode="Markdown")
 
         # Store that we're waiting for intro from this user
         if "pending_intros" not in context.bot_data:
@@ -378,6 +694,15 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "chat_id": chat_id,
             "stage": "awaiting_intro"
         }
+
+        # Schedule kick in 5 minutes if user doesn't respond
+        context.job_queue.run_once(
+            kick_silent_user,
+            when=300,  # 5 minutes
+            data={"user_id": new_member.id, "chat_id": chat_id, "user_name": user_name},
+            name=f"kick_{new_member.id}"
+        )
+        logger.info(f"Started 5-min intro timer for {user_name}")
 
 
 def main():
